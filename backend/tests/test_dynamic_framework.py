@@ -5,10 +5,9 @@ are correctly parsed, stored in state, and injected into the LLM system prompts.
 """
 
 import uuid
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from pydantic import ValidationError
 
 from app.api.v1.workflows import StartMigrationRequest
 from app.infrastructure.agents.nodes.planner import planner_node
@@ -77,7 +76,7 @@ async def test_planner_node_dynamic_prompt_injection(mock_dynamic_repo_state):
     and injects them into the generated LLM prompt.
     """
     with patch("app.infrastructure.agents.nodes.planner.llm_factory.get_gateway") as mock_get_llm:
-        
+
         # Mock LLM API response to prevent live network calls
         mock_llm_instance = AsyncMock()
         mock_response = MagicMock()
@@ -92,7 +91,7 @@ async def test_planner_node_dynamic_prompt_injection(mock_dynamic_repo_state):
         '''
         mock_response.total_tokens = 200
         mock_response.estimated_cost_usd = 0.002
-        
+
         # Keep track of what prompt was passed to the LLM
         mock_llm_instance.generate_text.return_value = mock_response
         mock_get_llm.return_value = mock_llm_instance
@@ -102,17 +101,17 @@ async def test_planner_node_dynamic_prompt_injection(mock_dynamic_repo_state):
 
         # Ensure the LLM was called
         mock_llm_instance.generate_text.assert_called_once()
-        
+
         # Extract the prompt passed to the LLM
         call_args = mock_llm_instance.generate_text.call_args
         prompt_used = call_args[1].get('prompt') or call_args[0][0]
-        
+
         # Verify our custom dynamic inputs made it into the prompt!
         assert "Redux Legacy" in prompt_used
         assert "Zustand" in prompt_used
         assert "TypeScript" in prompt_used
         assert "Migrate all createStore to Zustand hooks." in prompt_used
-        
+
         # Verify the node output is correctly structured
         assert result["current_step"] == "PlannerAgent"
         assert len(result["plan"]) == 1

@@ -2,8 +2,9 @@
 Pytest Test Fixtures and Global Configuration
 """
 
-import pytest
 from collections.abc import AsyncGenerator
+
+import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -38,14 +39,14 @@ async def setup_test_db():
 
 
 @pytest.fixture
-async def db_session() -> AsyncGenerator[AsyncSession, None]:
+async def db_session() -> AsyncGenerator[AsyncSession]:
     """Yields an isolated async session for direct DB operations in tests."""
     async with TestingSessionLocal() as session:
         yield session
 
 
 @pytest.fixture
-async def async_client() -> AsyncGenerator[AsyncClient, None]:
+async def async_client() -> AsyncGenerator[AsyncClient]:
     """Async HTTP test client fixture with DB dependency override."""
     async def override_get_async_db():
         async with TestingSessionLocal() as session:

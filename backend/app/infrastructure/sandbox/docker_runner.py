@@ -5,7 +5,6 @@ with automatic fallback to isolated subprocess execution when Docker daemon is n
 """
 
 import asyncio
-import os
 import shutil
 import sys
 from typing import Any

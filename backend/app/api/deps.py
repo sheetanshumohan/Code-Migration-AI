@@ -8,7 +8,6 @@ import typing
 import uuid
 from collections.abc import Callable
 
-import redis.exceptions
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
@@ -117,7 +116,6 @@ class RateLimiter:
         if not redis_engine._redis:
             return
 
-        import redis.exceptions
 
         from app.core.logging import get_logger
         logger = get_logger("codemigration.api.deps")

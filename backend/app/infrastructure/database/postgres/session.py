@@ -59,11 +59,12 @@ async def get_async_db() -> AsyncGenerator[AsyncSession]:
 
 
 from contextlib import asynccontextmanager
+
 from sqlalchemy.pool import NullPool
 
 
 @asynccontextmanager
-async def get_task_scoped_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_task_scoped_session() -> AsyncGenerator[AsyncSession]:
     """Provides an isolated AsyncSession using NullPool strictly bound to the caller's active event loop."""
     task_engine = create_async_engine(
         settings.POSTGRES_ASYNC_URI,

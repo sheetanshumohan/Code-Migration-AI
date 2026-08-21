@@ -70,7 +70,7 @@ async def repo_analyst_node(state: MigrationWorkflowState) -> dict[str, Any]:
         source_f = imp.get("source_file", "")
         target_raw = imp.get("target_symbol", "")
         target_clean = target_raw.strip("\"'`;")
-        
+
         if target_clean.startswith('.'):
             # Resolve relative import
             source_dir = os.path.dirname(source_f)

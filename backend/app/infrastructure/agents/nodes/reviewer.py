@@ -142,6 +142,7 @@ The autonomous agent pipeline processed repository `{state['repository_id']}`.
     # Persist PullRequest record in PostgreSQL
     try:
         import uuid as _uuid
+
         from app.infrastructure.database.postgres.models import PullRequest
         from app.infrastructure.database.postgres.session import get_task_scoped_session
 

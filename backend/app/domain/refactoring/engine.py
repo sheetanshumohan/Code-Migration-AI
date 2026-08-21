@@ -70,7 +70,7 @@ class RefactoringEngine:
 
         extracted_block = lines[target_lines_start - 1 : target_lines_end]
         indent = "    "
-        new_func = f"\ndef {new_method_name}():\n" + "\n".join(f"{indent}{l.strip()}" for l in extracted_block) + "\n"
+        new_func = f"\ndef {new_method_name}():\n" + "\n".join(f"{indent}{line.strip()}" for line in extracted_block) + "\n"
 
         call_line = f"{indent}{new_method_name}()"
         updated_lines = (
@@ -113,7 +113,7 @@ class RefactoringEngine:
             if len(func_lines) > 0 and func_lines[0].startswith("def "):
                 func_lines[0] = func_lines[0].replace("(", "(self, ", 1).replace("(self, )", "(self)")
 
-            extracted_code_blocks.append("\n".join(f"    {l}" for l in func_lines))
+            extracted_code_blocks.append("\n".join(f"    {line}" for line in func_lines))
             # Remove from original lines
             del lines[start_line:end_line]
 

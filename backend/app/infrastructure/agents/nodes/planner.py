@@ -63,14 +63,14 @@ async def planner_node(state: MigrationWorkflowState) -> dict[str, Any]:
     # Extract all valid source code files discovered in the workspace
     all_files = state.get("file_list", [])
     ignored_exts = (
-        '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf', '.eot', 
-        '.lock', '.zip', '.tar', '.gz', '.min.js', '.map', '.bin', '.exe', '.md', '.txt', 
+        '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf', '.eot',
+        '.lock', '.zip', '.tar', '.gz', '.min.js', '.map', '.bin', '.exe', '.md', '.txt',
         '.pdf', '.csv', '.json', '.yaml', '.yml', '.toml', '.xml', '.ini', '.cfg', '.env'
     )
     ignored_basenames = {
-        'license', 'license.md', 'license.txt', 'readme.md', '.gitignore', 
-        '.eslintignore', '.prettierignore', '.npmignore', '.dockerignore', 
-        '.gitattributes', '.editorconfig', '.browserslistrc', 'package-lock.json', 
+        'license', 'license.md', 'license.txt', 'readme.md', '.gitignore',
+        '.eslintignore', '.prettierignore', '.npmignore', '.dockerignore',
+        '.gitattributes', '.editorconfig', '.browserslistrc', 'package-lock.json',
         'yarn.lock', 'pnpm-lock.yaml', 'changelog.md', '_redirects', 'cname',
         'dockerfile', 'docker-compose.yml', 'docker-compose.yaml'
     }
@@ -97,7 +97,7 @@ async def planner_node(state: MigrationWorkflowState) -> dict[str, Any]:
             parts = f.replace('\\', '/').split('/')
             mod = parts[0] if len(parts) > 1 else 'root'
             module_groups.setdefault(mod, []).append(f)
-        
+
         file_summary_lines = []
         for mod, mod_files in list(module_groups.items())[:15]:
             sample = ', '.join(mod_files[:5])
@@ -146,15 +146,15 @@ RULES:
 
     except Exception as e:
         logger.error(f"Planner LLM failed (likely token limit / max capacity): {e}")
-        
+
         # Fallback: Construct a basic programmatic plan to ensure the workflow proceeds
         logger.info("Falling back to programmatic DAG plan generation.")
-        
+
         fallback_tasks = []
         # Group files into chunks of 10 to ensure reasonable payload sizes
         chunk_size = 10
         chunks = [source_files[i:i + chunk_size] for i in range(0, len(source_files), chunk_size)]
-        
+
         for idx, chunk in enumerate(chunks):
             fallback_tasks.append({
                 "id": f"fallback_task_{idx+1}",
@@ -164,7 +164,7 @@ RULES:
                 "dependencies": [f"fallback_task_{idx}"] if idx > 0 else [],
                 "status": "pending"
             })
-            
+
         if not fallback_tasks:
              fallback_tasks.append({
                 "id": "fallback_task_1",
@@ -174,7 +174,7 @@ RULES:
                 "dependencies": [],
                 "status": "pending"
              })
-             
+
         tasks = fallback_tasks
         prompt_tokens = count_tokens(prompt)
         comp_tokens = count_tokens(str(tasks))
@@ -182,7 +182,7 @@ RULES:
         provider_name = getattr(llm, "provider", "openai")
         plan_cost = calculate_cost(prompt_tokens, comp_tokens, provider=provider_name)
         state["status"] = "awaiting_approval"
-        
+
         await redis_engine.publish_workflow_event(state["workflow_id"], {
             "agent": "PlannerAgent",
             "thought": "LLM hit output capacity. Generated modular fallback plan programmatically to guarantee completion.",

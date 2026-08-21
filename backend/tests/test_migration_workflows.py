@@ -4,7 +4,7 @@ Validates that the LangGraph workflow executes end-to-end and integrates with th
 """
 
 import uuid
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -42,14 +42,14 @@ async def test_refactor_node_integration(mock_repo_state):
 
         # Mock file system reads
         mock_read.return_value = "def legacy_flask_app(): pass"
-        
+
         # Mock LLM API response to prevent live network calls and costs
         mock_llm_instance = AsyncMock()
         mock_response = MagicMock()
         mock_response.content = "```python\n# Refactored via AI\ndef modern_fastapi_app(): pass\n```"
         mock_response.total_tokens = 150
         mock_response.estimated_cost_usd = 0.001
-        
+
         mock_llm_instance.generate_text.return_value = mock_response
         mock_get_llm.return_value = mock_llm_instance
 
@@ -60,12 +60,12 @@ async def test_refactor_node_integration(mock_repo_state):
         assert result["current_step"] == "RefactorAgent"
         assert len(result["file_changes"]) > 0
         file_change = result["file_changes"][0]
-        
+
         # Depending on whether file_change is a dict or a Pydantic model
         file_path = file_change.get("file_path") if isinstance(file_change, dict) else getattr(file_change, "file_path", None)
         status = file_change.get("status") if isinstance(file_change, dict) else getattr(file_change, "status", None)
         transformed_code = file_change.get("transformed_code", "") if isinstance(file_change, dict) else getattr(file_change, "transformed_code", "")
-        
+
         assert file_path == "main.py"
         assert status == "applied"
         assert transformed_code and "Refactored via" in transformed_code

@@ -18,10 +18,10 @@ AGENT DEFINITION:
 """
 
 import asyncio
-from datetime import UTC, datetime
 import difflib
 import os
 import re
+from datetime import UTC, datetime
 from typing import Any
 
 from app.core.logging import get_logger
@@ -61,15 +61,15 @@ async def refactor_node(state: MigrationWorkflowState) -> dict[str, Any]:
     all_repo_files = state.get("file_list", [])
     expanded_files: list[str] = []
     ignored_exts = (
-        '.md', '.txt', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', 
-        '.ttf', '.eot', '.lock', '.zip', '.tar', '.gz', '.min.js', '.map', '.bin', '.exe', 
-        '.pdf', '.csv', '_redirects', '.json', '.yaml', '.yml', '.toml', '.xml', '.ini', 
+        '.md', '.txt', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2',
+        '.ttf', '.eot', '.lock', '.zip', '.tar', '.gz', '.min.js', '.map', '.bin', '.exe',
+        '.pdf', '.csv', '_redirects', '.json', '.yaml', '.yml', '.toml', '.xml', '.ini',
         '.cfg', '.env'
     )
     ignored_basenames = {
-        'license', 'license.md', 'license.txt', 'readme.md', '.gitignore', 
-        '.eslintignore', '.prettierignore', '.npmignore', '.dockerignore', 
-        '.gitattributes', '.editorconfig', '.browserslistrc', 'package-lock.json', 
+        'license', 'license.md', 'license.txt', 'readme.md', '.gitignore',
+        '.eslintignore', '.prettierignore', '.npmignore', '.dockerignore',
+        '.gitattributes', '.editorconfig', '.browserslistrc', 'package-lock.json',
         'yarn.lock', 'pnpm-lock.yaml', 'changelog.md', '_redirects', 'cname',
         'dockerfile', 'docker-compose.yml', 'docker-compose.yaml'
     }
@@ -90,7 +90,7 @@ async def refactor_node(state: MigrationWorkflowState) -> dict[str, Any]:
             matching = [f for f in all_repo_files if _is_refactorable(f)][:3]
         else:
             matching = [
-                f for f in all_repo_files 
+                f for f in all_repo_files
                 if (f.replace('\\', '/').startswith(norm_tf + '/') or f.replace('\\', '/') == norm_tf)
                 and _is_refactorable(f)
             ]

@@ -3,11 +3,13 @@ Prompt Validator Node for LangGraph
 Validates the user's custom objective to ensure it is not too vague.
 """
 from typing import Any
+
 from pydantic import BaseModel, Field
+
+from app.core.config import settings
 from app.core.logging import get_logger
 from app.infrastructure.agents.state import MigrationWorkflowState
 from app.infrastructure.ai.factory import llm_factory
-from app.core.config import settings
 
 try:
     from langsmith import traceable
@@ -24,15 +26,15 @@ class PromptValidationResult(BaseModel):
 async def prompt_validator_node(state: MigrationWorkflowState) -> dict[str, Any]:
     """Validates the migration goal to prevent garbage-in garbage-out."""
     workflow_type = state.get("workflow_type")
-    
+
     # We only strongly validate custom goals
     if workflow_type != "custom_modernization":
         return {"current_task": "prompt_validation"}
-        
+
     custom_goal = state.get("custom_goal", "")
     target_framework = state.get("target_framework", "")
     source_framework = state.get("source_framework", "")
-    
+
     if not custom_goal or len(custom_goal.strip()) < 10:
         logger.error("Prompt validation failed: Objective is too short.")
         # Halt workflow
@@ -71,7 +73,7 @@ async def prompt_validator_node(state: MigrationWorkflowState) -> dict[str, Any]
     reason detailing EXACTLY what technical dimensions are missing, and give a brief example of how 
     the user could improve their prompt.
     """
-    
+
     gateway = llm_factory.get_gateway()
     try:
         response = await gateway.generate_structured(
@@ -80,15 +82,15 @@ async def prompt_validator_node(state: MigrationWorkflowState) -> dict[str, Any]
             response_model=PromptValidationResult,
             model=settings.DEFAULT_FAST_MODEL,
         )
-        
+
         if not response.is_valid:
             logger.error(f"Prompt validation failed: {response.reason}")
             # Raising ValueError here will halt the pipeline and set the workflow status to error
             raise ValueError(f"Custom Objective is too vague: {response.reason}. Please use the 'Enhance Objective' button to improve it.")
-            
+
         logger.info("Prompt validation passed.")
         return {"current_task": "prompt_validation"}
-        
+
     except ValueError:
         raise
     except Exception as e:

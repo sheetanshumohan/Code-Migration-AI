@@ -30,7 +30,7 @@ class GitEngine:
     def validate_repository(self, repo_url: str, auth_token: str | None = None) -> bool:
         """Validates if a remote repository exists and is accessible using git ls-remote."""
         import subprocess
-        
+
         # Inject token into URL if provided
         url_to_check = repo_url
         if auth_token:
@@ -39,7 +39,7 @@ class GitEngine:
                 url_to_check = f"{parts[0]}://oauth2:{auth_token}@{parts[1]}" if "gitlab" in repo_url else f"{parts[0]}://{auth_token}@{parts[1]}"
             else:
                 url_to_check = f"https://{auth_token}@{repo_url}"
-                
+
         try:
             result = subprocess.run(
                 ["git", "ls-remote", "--heads", url_to_check],
@@ -131,8 +131,8 @@ class GitEngine:
     def list_repository_files(self, repo_path: str) -> list[str]:
         """List all non-ignored, processable source code files in the repository."""
         ignored_dirs = {
-            '.git', '.yarn', 'node_modules', '.docusaurus', 'dist', 'build', 
-            'coverage', '.next', 'vendor', '.cache', 'target', 'bin', 'obj', 
+            '.git', '.yarn', 'node_modules', '.docusaurus', 'dist', 'build',
+            'coverage', '.next', 'vendor', '.cache', 'target', 'bin', 'obj',
             '__pycache__', '.venv', 'venv', '.turbo', '.output'
         }
         ignored_exts = (
@@ -187,7 +187,7 @@ class GitEngine:
                     import stat
                     os.chmod(path, stat.S_IWRITE)
                     func(path)
-                
+
                 shutil.rmtree(target_path, onerror=on_rm_error)
                 logger.info("Deleted repository from disk", repo_id=repo_id, path=str(target_path))
             except Exception as e:

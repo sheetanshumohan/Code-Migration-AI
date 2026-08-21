@@ -1,20 +1,7 @@
-[build-system]
-requires = ["setuptools>=68.0"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "codemigration-ai"
-version = "1.0.0"
-description = "Enterprise Agentic Code Modernization, Migration & Refactoring Platform"
-readme = "README.md"
-requires-python = ">=3.12"
-dependencies = []
-
-[tool.ruff]
 line-length = 120
 target-version = "py312"
 
-[tool.ruff.lint]
+[lint]
 select = [
     "E",   # pycodestyle errors
     "W",   # pycodestyle warnings
@@ -38,19 +25,3 @@ ignore = [
     "W292",  # no newline at end of file
     "E741",  # ambiguous variable name
 ]
-
-[tool.pytest.ini_options]
-minversion = "8.0"
-addopts = "-ra -q --asyncio-mode=auto"
-pythonpath = ["."]
-testpaths = [
-    "tests",
-]
-python_files = "test_*.py"
-
-[tool.mypy]
-python_version = "3.12"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-ignore_missing_imports = true

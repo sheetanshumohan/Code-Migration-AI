@@ -12,12 +12,12 @@ from app.core.logging import get_logger
 # Extended 14 Agent Nodes
 # Base Nodes
 from app.infrastructure.agents.nodes.planner import planner_node
+from app.infrastructure.agents.nodes.prompt_validator import prompt_validator_node
 from app.infrastructure.agents.nodes.refactor import refactor_node
 from app.infrastructure.agents.nodes.repo_analyst import repo_analyst_node
 from app.infrastructure.agents.nodes.reviewer import reviewer_node
 from app.infrastructure.agents.nodes.test_generator import test_generator_node
 from app.infrastructure.agents.nodes.validator import validator_node
-from app.infrastructure.agents.nodes.prompt_validator import prompt_validator_node
 from app.infrastructure.agents.state import MigrationWorkflowState
 
 logger = get_logger("codemigration.agent.workflow")

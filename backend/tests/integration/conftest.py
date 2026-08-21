@@ -1,7 +1,9 @@
 import os
 import shutil
 import tempfile
+
 import pytest
+
 
 @pytest.fixture
 def real_repo_fixture():
@@ -10,7 +12,7 @@ def real_repo_fixture():
     for the migration engine to parse, read, and write to.
     """
     temp_dir = tempfile.mkdtemp(prefix="codemigration_integration_")
-    
+
     # Create a legacy Flask application file
     main_py_path = os.path.join(temp_dir, "main.py")
     legacy_code = """
@@ -30,8 +32,8 @@ if __name__ == "__main__":
 """
     with open(main_py_path, "w") as f:
         f.write(legacy_code)
-        
+
     yield temp_dir
-    
+
     # Teardown
     shutil.rmtree(temp_dir, ignore_errors=True)

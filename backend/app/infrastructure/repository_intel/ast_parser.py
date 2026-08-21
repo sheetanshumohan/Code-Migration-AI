@@ -53,7 +53,7 @@ class ASTSymbolParser:
 
         try:
             ts_lang = tree_sitter_languages.get_language(language)
-            
+
             # tree-sitter >= 0.22.0 has removed set_language and expects a Language object in the constructor.
             # However, tree_sitter_languages may return an incompatible Language object from an older bundled version.
             # We must recreate the Language object using the new API if possible.
@@ -71,10 +71,10 @@ class ASTSymbolParser:
                     # Old API fallback
                     parser = Parser()
                     parser.set_language(ts_lang)
-            except Exception as e:
+            except Exception:
                 # If reconstruction fails, just try the constructor directly (might work on some versions)
                 parser = Parser(ts_lang)
-                
+
             self._parsers[language] = parser
             return parser
         except Exception as e:
@@ -167,7 +167,7 @@ class ASTSymbolParser:
             # 3. Imports
             elif "import" in node_type or "use_declaration" in node_type:
                 raw_text = code_bytes[node.start_byte : node.end_byte].decode("utf-8", errors="ignore")
-                
+
                 target_file = None
                 match = re.search(r'[\'"]([^\'"]+)[\'"]', raw_text)
                 if match:
@@ -176,7 +176,7 @@ class ASTSymbolParser:
                     match = re.search(r'(?:from|import)\s+([a-zA-Z0-9_\.]+)', raw_text)
                     if match:
                         target_file = match.group(1).replace('.', '/')
-                        
+
                 imports.append({
                     "source_file": file_path,
                     "raw_import": raw_text.strip(),
@@ -192,7 +192,7 @@ class ASTSymbolParser:
                         callee_node = node.children[0]
                         raw_callee = code_bytes[callee_node.start_byte : callee_node.end_byte].decode("utf-8", errors="ignore")
                         callee_name = raw_callee.split(".")[-1] # Simple heuristic to get the function name
-                        
+
                     if callee_name:
                         calls.append({
                             "caller_id": current_function_id,

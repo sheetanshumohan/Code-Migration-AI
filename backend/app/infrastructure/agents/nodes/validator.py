@@ -1,6 +1,6 @@
 import asyncio
-from datetime import UTC, datetime
 import os
+from datetime import UTC, datetime
 from typing import Any
 
 from app.core.logging import get_logger
@@ -82,6 +82,7 @@ async def validator_node(state: MigrationWorkflowState) -> dict[str, Any]:
     # Persist ValidationRun record to PostgreSQL for platform KPI calculations
     try:
         import uuid as _uuid
+
         from app.infrastructure.database.postgres.models import ValidationRun
         from app.infrastructure.database.postgres.session import get_task_scoped_session
 

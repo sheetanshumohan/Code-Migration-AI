@@ -4,9 +4,9 @@ Synthesizes comprehensive unit, integration, and regression test suites for newl
 """
 
 import asyncio
-from datetime import UTC, datetime
 import os
 import re
+from datetime import UTC, datetime
 from typing import Any
 
 from app.core.config import settings
@@ -56,13 +56,13 @@ async def test_generator_node(state: MigrationWorkflowState) -> dict[str, Any]:
     # Process only the files modified in the current DAG task
     valid_code_exts = ('.py', '.js', '.jsx', '.ts', '.tsx', '.java', '.go', '.rs', '.cpp', '.c', '.cs', '.rb', '.php')
     recent_changes = [
-        c for c in file_changes 
+        c for c in file_changes
         if any(c.get("file_path", "").lower().endswith(ext) for ext in valid_code_exts)
         and not os.path.basename(c.get("file_path", "")).startswith('.')
         and (
             not target_files or any(
-                c["file_path"].replace('\\', '/').startswith(tf.replace('\\', '/').rstrip('/') + '/') 
-                or c["file_path"].replace('\\', '/') == tf.replace('\\', '/') 
+                c["file_path"].replace('\\', '/').startswith(tf.replace('\\', '/').rstrip('/') + '/')
+                or c["file_path"].replace('\\', '/') == tf.replace('\\', '/')
                 for tf in target_files
             )
         )

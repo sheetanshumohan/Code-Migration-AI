@@ -49,7 +49,7 @@ from pydantic import BaseModel
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.telemetry import LLM_TOKEN_USAGE_COUNTER
-from app.core.token_counter import calculate_cost, count_tokens
+from app.core.token_counter import calculate_cost
 from app.infrastructure.agents.safety import agent_safety_filter
 from app.infrastructure.ai.base import BaseLLMGateway, LLMResponse
 
@@ -86,14 +86,14 @@ class OpenAIGateway(BaseLLMGateway):
 
         if "gpt-oss" in model_name or "qwen" in model_name:
             model_name = "gpt-4o"
-            
+
         candidate_models = [
             model_name,
             "gpt-4o-mini",
             "gpt-4o",
             "gpt-3.5-turbo",
         ]
-        
+
         last_err = None
         for m in candidate_models:
             try:
@@ -106,7 +106,7 @@ class OpenAIGateway(BaseLLMGateway):
                     temperature=temperature,
                     max_tokens=max_tokens,
                 )
-                
+
                 content = resp.choices[0].message.content or ""
                 p_tokens = resp.usage.prompt_tokens if resp.usage else 0
                 c_tokens = resp.usage.completion_tokens if resp.usage else 0
@@ -128,7 +128,7 @@ class OpenAIGateway(BaseLLMGateway):
             except Exception as e:
                 logger.debug(f"OpenAI model {m} failed: {e}")
                 last_err = e
-                
+
         raise last_err or RuntimeError("OpenAI generate_text failed across candidate models.")
 
 
@@ -174,14 +174,14 @@ class OpenAIGateway(BaseLLMGateway):
 
         if "gpt-oss" in model_name or "qwen" in model_name:
             model_name = "gpt-4o"
-            
+
         candidate_models = [
             model_name,
             "gpt-4o-mini",
             "gpt-4o",
             "gpt-3.5-turbo",
         ]
-        
+
         last_err = None
         for m in candidate_models:
             try:
@@ -458,9 +458,9 @@ class GeminiGateway(BaseLLMGateway):
         # Candidate models in order of capability & free-tier availability
         requested_model = model or settings.GEMINI_DEFAULT_MODEL
         candidate_models = [
-            requested_model, 
-            "gemini-3.6-flash", 
-            "gemini-3.6-pro", 
+            requested_model,
+            "gemini-3.6-flash",
+            "gemini-3.6-pro",
         ]
         # Deduplicate while preserving order
         unique_models = list(dict.fromkeys(candidate_models))
@@ -523,9 +523,9 @@ class GeminiGateway(BaseLLMGateway):
 
         requested_model = model or settings.GEMINI_DEFAULT_MODEL
         candidate_models = [
-            requested_model, 
-            "gemini-3.6-flash", 
-            "gemini-3.6-pro", 
+            requested_model,
+            "gemini-3.6-flash",
+            "gemini-3.6-pro",
         ]
         unique_models = list(dict.fromkeys(candidate_models))
 
@@ -657,7 +657,7 @@ class ResilientGateway(BaseLLMGateway):
                     logger.info(f"Failing over to {provider} for generate_stream...")
                 gw = LLMGatewayFactory._get_raw_gateway(provider)
                 target_model = model if provider == self.primary_provider else None
-                
+
                 stream = gw.generate_stream(
                     system_prompt=system_prompt,
                     user_prompt=user_prompt,

@@ -148,7 +148,7 @@ async def get_telemetry(
         iso_str = None
         if ts:
             if ts.tzinfo is None:
-                ts_utc = ts.replace(tzinfo=datetime.timezone.utc)
+                ts_utc = ts.replace(tzinfo=datetime.UTC)
             else:
                 ts_utc = ts
             iso_str = ts_utc.isoformat()

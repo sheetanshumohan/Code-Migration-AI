@@ -73,6 +73,7 @@ async def create_checkout_session(
 
 from pydantic import BaseModel
 
+
 class ConfirmSessionRequest(BaseModel):
     session_id: str
 

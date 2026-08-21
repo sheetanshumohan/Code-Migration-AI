@@ -3,19 +3,15 @@ Main FastAPI Application Entrypoint
 Integrates Clean Architecture layers, CORS, Routers, Observability, and Lifespan managers.
 """
 
-import typing
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Request, status
+from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
-
-from app.api.deps import get_async_db
 
 from app.api.v1.auth import router as auth_router
 from app.api.v1.chat import router as chat_router

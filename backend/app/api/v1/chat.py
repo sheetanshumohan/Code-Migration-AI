@@ -8,7 +8,7 @@ import re
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -109,8 +109,6 @@ def generate_local_ast_response(
     """
     q = query.lower()
     topo = _calculate_graph_topology(graph_snapshot)
-    nodes = graph_snapshot.get("nodes", [])
-    edges = graph_snapshot.get("edges", [])
 
     target_repo = repo_name or "Connected Codebase"
     lang_str = ", ".join(languages) if languages else "TypeScript / JavaScript"
@@ -577,6 +575,6 @@ CORE PRINCIPLES & RESPONSE MANDATES:
     return ChatResponse(
         agentName="ArchitectureCopilot",
         text=response_text,
-        time=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        time=datetime.datetime.now(datetime.UTC).isoformat(),
     )
 

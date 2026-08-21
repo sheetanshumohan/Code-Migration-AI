@@ -4,9 +4,9 @@ Orchestrates asynchronous migration execution, background AST indexing, and sand
 """
 
 import asyncio
-from datetime import UTC, datetime
 import typing
 import uuid
+from datetime import UTC, datetime
 
 from celery import Celery
 
@@ -105,10 +105,11 @@ def run_migration_workflow_task(
     }
 
     async def execute_graph() -> dict:
-        from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-        from sqlalchemy.pool import NullPool
-        from app.infrastructure.database.postgres.models import Workflow
         from sqlalchemy import func, update
+        from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+        from sqlalchemy.pool import NullPool
+
+        from app.infrastructure.database.postgres.models import Workflow
 
         # Initialize task-scoped engine with NullPool bound strictly to this event loop
         task_engine = create_async_engine(
@@ -340,19 +341,22 @@ def run_migration_workflow_task(
             logger.info("Workflow execution cancelled. Skipping error mark.", workflow_id=workflow_id)
             return {"status": "cancelled", "workflow_id": workflow_id}
 
-        logger.error("Celery workflow execution failed", error=str(e))
+        error_message = str(e)
+        logger.error("Celery workflow execution failed", error=error_message)
 
         # Update DB workflow status to 'failed' and broadcast failure event over WebSocket
         async def _mark_failed():
             from datetime import UTC, datetime
+
             from sqlalchemy import update
-            from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+            from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
             from sqlalchemy.pool import NullPool
+
             from app.infrastructure.database.postgres.models import Workflow
-            
+
             fail_engine = create_async_engine(settings.POSTGRES_ASYNC_URI, poolclass=NullPool, echo=False)
             try:
-                raw_error = str(e)
+                raw_error = error_message
                 if "429" in raw_error or "rate_limit" in raw_error.lower() or "quota" in raw_error.lower() or "resource_exhausted" in raw_error.lower():
                     user_msg = "LLM Provider Rate Limit / Quota Exceeded. Execution halted and checkpoint safely preserved in PostgreSQL. You can resume from this exact step once rate limits reset."
                 elif "timeout" in raw_error.lower():
@@ -401,7 +405,7 @@ def run_migration_workflow_task(
 def index_repository_ast_task(self, org_id: str, repo_id: str, repo_path: str, repo_url: str) -> dict:
     """Background task to clone repo, parse AST, and index into Neo4j/Qdrant."""
     from app.infrastructure.repository_intel.git_engine import git_engine
-    
+
     logger.info("Starting AST indexing task", repo_id=repo_id, org_id=org_id)
     try:
         # Clone or sync the repository securely isolated by organization
@@ -411,8 +415,9 @@ def index_repository_ast_task(self, org_id: str, repo_id: str, repo_path: str, r
         return {"status": "failed", "error": str(e)}
 
     import asyncio
-    from app.infrastructure.repository_intel.ast_parser import ast_parser
+
     from app.infrastructure.database.neo4j.driver import neo4j_engine
+    from app.infrastructure.repository_intel.ast_parser import ast_parser
 
     try:
         file_list = git_engine.list_repository_files(repo_path=repo_path)
@@ -420,7 +425,7 @@ def index_repository_ast_task(self, org_id: str, repo_id: str, repo_path: str, r
         all_symbols = []
         all_imports = []
         all_calls = []
-        
+
         import os
         file_set = set(f.replace('\\', '/') for f in file_list)
         file_map_no_ext = {f.rsplit('.', 1)[0].replace('\\', '/'): f for f in file_list}
@@ -503,11 +508,12 @@ def index_repository_ast_task(self, org_id: str, repo_id: str, repo_path: str, r
 
         # Update PostgreSQL Repository with total_nodes
         from sqlalchemy import update
+
         from app.infrastructure.database.postgres.models import Repository
-        from app.core.config import settings
-        
+
         async def _update_db():
             import uuid as _uuid
+
             from app.infrastructure.database.postgres.session import get_task_scoped_session
             repo_uuid = _uuid.UUID(str(repo_id)) if not isinstance(repo_id, _uuid.UUID) else repo_id
             async with get_task_scoped_session() as session:
@@ -517,7 +523,7 @@ def index_repository_ast_task(self, org_id: str, repo_id: str, repo_path: str, r
                     .values(ast_node_count=total_nodes, sync_status="synced")
                 )
                 await session.commit()
-        
+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         loop.run_until_complete(_update_db())

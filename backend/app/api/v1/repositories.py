@@ -200,7 +200,6 @@ async def get_repository_file_tree(
 
     repo_path = git_engine.get_repo_path(str(current_user.organization_id), repo_id)
     if not os.path.exists(repo_path):
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Repository not found or not cloned yet.")
 
     files = await run_in_threadpool(git_engine.list_repository_files, repo_path)
@@ -238,21 +237,21 @@ async def delete_repository_endpoint(
     from app.infrastructure.database.neo4j.driver import neo4j_engine
     try:
         await neo4j_engine.delete_repository_ast(repo_id)
-    except Exception as e:
+    except Exception:
         pass
 
     # 2. Delete vector embeddings from Qdrant
     from app.infrastructure.database.qdrant.client import qdrant_engine
     try:
         await qdrant_engine.delete_repository_embeddings(repo_id)
-    except Exception as e:
+    except Exception:
         pass
 
     # 3. Delete files from disk
     from app.infrastructure.repository_intel.git_engine import git_engine
     try:
         await run_in_threadpool(git_engine.delete_repository, str(current_user.organization_id), repo_id)
-    except Exception as e:
+    except Exception:
         pass
 
     # 4. Delete the Repository record from Postgres (cascades workflows, PRs, etc.)

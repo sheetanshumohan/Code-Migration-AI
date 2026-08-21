@@ -6,6 +6,7 @@ Handles initiating migration DAGs, streaming status, pausing for human approval,
 import uuid
 from datetime import UTC, datetime
 from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -168,8 +169,8 @@ async def enhance_prompt(
     current_user: User = Depends(get_current_user),
 ) -> Any:
     """Uses LLM to expand a brief custom goal into a structured architectural constraint."""
-    from app.infrastructure.ai.factory import llm_factory
     from app.core.config import settings
+    from app.infrastructure.ai.factory import llm_factory
 
     if not req.custom_goal or len(req.custom_goal.strip()) == 0:
         raise HTTPException(status_code=400, detail="Custom goal cannot be empty.")
@@ -202,7 +203,7 @@ async def enhance_prompt(
     --------------
     Produce ONLY the expanded, professional prompt. Do NOT include conversational filler, meta-commentary, or your reasoning. The output must be ready to be passed directly as the primary instruction to the execution agent.
     """
-    
+
     gateway = llm_factory.get_gateway()
     try:
         response = await gateway.generate_text(
@@ -308,6 +309,7 @@ async def stop_all_active_workflows(
 ) -> Any:
     """Stop and cancel ALL active/executing workflows for the organization."""
     from datetime import UTC, datetime
+
     from app.infrastructure.database.redis.client import redis_engine
 
     stmt = (
@@ -354,8 +356,9 @@ async def cancel_workflow(
 ) -> Any:
     """Stop and cancel an active migration workflow execution."""
     from datetime import UTC, datetime
-    from app.infrastructure.database.redis.client import redis_engine
+
     from app.core.audit import record_audit_log
+    from app.infrastructure.database.redis.client import redis_engine
 
     stmt = (
         select(Workflow)
@@ -415,8 +418,9 @@ async def resume_workflow(
 ) -> Any:
     """Resume a stopped, cancelled, failed, or interrupted workflow from its last saved LangGraph checkpoint."""
     from datetime import UTC, datetime
-    from app.infrastructure.database.redis.client import redis_engine
+
     from app.core.audit import record_audit_log
+    from app.infrastructure.database.redis.client import redis_engine
 
     stmt = (
         select(Workflow)
@@ -509,6 +513,7 @@ async def get_workflow_details(
 ) -> Any:
     """Get full workflow execution state, including agent thoughts and file diffs, leveraging LangGraph PostgreSQL checkpointer."""
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
     from app.core.config import settings
     from app.infrastructure.agents.workflow import build_migration_graph
 
@@ -523,7 +528,7 @@ async def get_workflow_details(
     )
     res = await db.execute(stmt)
     wf = res.scalar_one_or_none()
-    
+
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
 
@@ -558,7 +563,7 @@ async def get_workflow_details(
                 "configurable": {"thread_id": thread_id},
                 "recursion_limit": settings.WORKFLOW_RECURSION_LIMIT,
             }
-            
+
             # Fetch state from checkpointer
             state = await app_graph.aget_state(config)
             if state and state.values:
@@ -570,7 +575,7 @@ async def get_workflow_details(
     # Also fetch Redis buffered events to guarantee 100% instant recovery on tab switching
     from app.infrastructure.database.redis.client import redis_engine
     buffered_events = await redis_engine.get_workflow_events(workflow_id)
-    
+
     redis_thoughts = []
     redis_file_changes = []
     for ev in buffered_events:
@@ -631,7 +636,7 @@ async def get_workflow_details(
         latest_step_idx = 5
     elif wf.status == "awaiting_approval":
         latest_step_idx = 1
-    
+
     response_data["current_step_index"] = latest_step_idx
 
     return response_data
@@ -644,8 +649,9 @@ async def reject_workflow_plan(
 ) -> Any:
     """Human-in-the-loop: Reject the planned migration DAG and halt execution."""
     from datetime import UTC, datetime
-    from app.infrastructure.database.redis.client import redis_engine
+
     from app.core.audit import record_audit_log
+    from app.infrastructure.database.redis.client import redis_engine
 
     stmt = (
         select(Workflow)
@@ -713,10 +719,10 @@ async def delete_workflow(
     )
     res = await db.execute(stmt)
     wf = res.scalar_one_or_none()
-    
+
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
-        
+
     await db.delete(wf)
     await db.commit()
     return {"status": "deleted"}

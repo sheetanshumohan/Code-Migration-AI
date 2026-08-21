@@ -8,8 +8,8 @@ import json
 import uuid
 from typing import Any
 
-from starlette.requests import Request
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.requests import Request
 
 from app.core.logging import get_logger
 from app.infrastructure.database.postgres.models import AuditLog
@@ -48,7 +48,7 @@ async def record_audit_log(
     Gracefully catches and logs errors so audit logging never crashes business flows.
     """
     meta = metadata or {}
-    
+
     org_uuid = uuid.UUID(str(organization_id)) if not isinstance(organization_id, uuid.UUID) else organization_id
     user_uuid = (
         uuid.UUID(str(user_id))
@@ -85,7 +85,7 @@ async def record_audit_log(
         user_agent=client_ua or "WebClient",
         integrity_hash=integrity_hash,
     )
-    
+
     try:
         db.add(log_entry)
         await db.commit()

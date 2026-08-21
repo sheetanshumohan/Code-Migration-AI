@@ -52,7 +52,7 @@ class RedisEngine:
                 url = f"rediss://default:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}?ssl_cert_reqs=none"
             else:
                 url = f"redis://:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}" if settings.REDIS_PASSWORD else f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}"
-            
+
             self._redis = aioredis.from_url(
                 url,
                 decode_responses=True,
@@ -103,10 +103,10 @@ class RedisEngine:
         redis = await self._ensure_redis()
         if not redis:
             return 0
-        
+
         payload = json.dumps(event_data)
         history_key = f"workflow_events:{workflow_id}"
-        
+
         try:
             # Buffer event to Redis list with 24-hour TTL for instant tab switching / rehydration
             await redis.rpush(history_key, payload)
@@ -122,7 +122,7 @@ class RedisEngine:
         redis = await self._ensure_redis()
         if not redis:
             return []
-        
+
         history_key = f"workflow_events:{workflow_id}"
         try:
             raw_items = await redis.lrange(history_key, 0, -1)

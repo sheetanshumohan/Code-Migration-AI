@@ -3,7 +3,7 @@ Integration Tests for Payment & Subscriptions Subsystem (Stripe)
 Verifies checkout session creation, validation, and webhook processing for plan upgrades.
 """
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from httpx import AsyncClient
@@ -34,14 +34,14 @@ async def authenticated_user_token(async_client: AsyncClient) -> str:
             headers={"Content-Type": "application/x-www-form-urlencoded"}
         )
         return str(login_resp.json()["access_token"])
-    
+
     return str(response.json()["access_token"])
 
 
 async def test_create_checkout_session_invalid_plan(async_client: AsyncClient, authenticated_user_token: str):
     """Verify that requesting an unknown plan fails with 400."""
     headers = {"Authorization": f"Bearer {authenticated_user_token}"}
-    
+
     response = await async_client.post(
         "/api/v1/subscriptions/create-checkout-session?plan=hacker",
         headers=headers
@@ -59,12 +59,12 @@ async def test_create_checkout_session_success(mock_stripe_create, async_client:
     mock_stripe_create.return_value = mock_session
 
     headers = {"Authorization": f"Bearer {authenticated_user_token}"}
-    
+
     response = await async_client.post(
         "/api/v1/subscriptions/create-checkout-session?plan=pro",
         headers=headers
     )
-    
+
     assert response.status_code == 200
     data = response.json()
     assert "url" in data
@@ -75,7 +75,7 @@ async def test_create_checkout_session_success(mock_stripe_create, async_client:
 @patch("app.api.v1.subscriptions.stripe.checkout.Session.retrieve")
 async def test_confirm_checkout_session_success(mock_stripe_retrieve, async_client: AsyncClient, authenticated_user_token: str, db_session: AsyncSession):
     """Verify that confirming a paid session upgrades the user's organization plan."""
-    
+
     # Mock the Stripe Session retrieval
     mock_session = MagicMock()
     mock_session.payment_status = "paid"
@@ -91,13 +91,13 @@ async def test_confirm_checkout_session_success(mock_stripe_retrieve, async_clie
     mock_stripe_retrieve.return_value = mock_session
 
     headers = {"Authorization": f"Bearer {authenticated_user_token}"}
-    
+
     response = await async_client.post(
         "/api/v1/subscriptions/confirm-session",
         json={"session_id": "cs_test_12345"},
         headers=headers
     )
-    
+
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "success"
@@ -108,10 +108,10 @@ async def test_confirm_checkout_session_success(mock_stripe_retrieve, async_clie
     from app.infrastructure.database.postgres.models import User
     user_stmt = select(User).where(User.email == "subscriber@enterprise.com")
     user = (await db_session.execute(user_stmt)).scalar_one()
-    
+
     org_stmt = select(Organization).where(Organization.id == user.organization_id)
     org = (await db_session.execute(org_stmt)).scalar_one()
-    
+
     assert org.plan_tier == "pro"
     assert org.stripe_customer_id == "cus_12345"
     assert org.stripe_subscription_id == "sub_12345"
@@ -120,7 +120,7 @@ async def test_confirm_checkout_session_success(mock_stripe_retrieve, async_clie
 @patch("app.api.v1.subscriptions.stripe.checkout.Session.retrieve")
 async def test_confirm_checkout_session_unpaid(mock_stripe_retrieve, async_client: AsyncClient, authenticated_user_token: str):
     """Verify that attempting to confirm an unpaid session is rejected."""
-    
+
     # Mock an unpaid session
     mock_session = MagicMock()
     mock_session.to_dict.return_value = {
@@ -130,12 +130,12 @@ async def test_confirm_checkout_session_unpaid(mock_stripe_retrieve, async_clien
     mock_stripe_retrieve.return_value = mock_session
 
     headers = {"Authorization": f"Bearer {authenticated_user_token}"}
-    
+
     response = await async_client.post(
         "/api/v1/subscriptions/confirm-session",
         json={"session_id": "cs_test_unpaid_123"},
         headers=headers
     )
-    
+
     assert response.status_code == 400
     assert "not complete" in response.json()["detail"]
