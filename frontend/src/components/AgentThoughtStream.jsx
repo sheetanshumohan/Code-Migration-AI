@@ -60,7 +60,7 @@ export default function AgentThoughtStream({
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1.5 text-[11px] text-cyan-400 font-mono">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Reasoning...</span>
+                <span>Reasoning & Executing...</span>
               </div>
               {onStopWorkflow && (
                 <button

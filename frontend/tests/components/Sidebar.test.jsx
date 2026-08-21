@@ -33,7 +33,8 @@ describe('Sidebar Component', () => {
     // Verify main navigation links exist
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
     expect(screen.getByText('Migration Studio')).toBeInTheDocument();
-    expect(screen.getByText('Settings & Models')).toBeInTheDocument();
+    expect(screen.getByText('AI Architecture Copilot')).toBeInTheDocument();
+    expect(screen.getByText('Repository Explorer')).toBeInTheDocument();
     
     // Check for badge on Migration Studio
     expect(screen.getByText('Live')).toBeInTheDocument();

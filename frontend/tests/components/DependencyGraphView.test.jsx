@@ -27,6 +27,7 @@ vi.mock('@xyflow/react', async () => {
     },
     Handle: () => <div data-testid="handle" />,
     Position: { Top: 'top', Bottom: 'bottom', Left: 'left', Right: 'right' },
+    MarkerType: { Arrow: 'arrow', ArrowClosed: 'arrowclosed' },
   };
 });
 
@@ -34,15 +35,14 @@ describe('DependencyGraphView Component', () => {
   it('renders the graph container and header', () => {
     render(<DependencyGraphView />);
     
-    expect(screen.getByText('Interactive AST Call & Dependency Graph')).toBeInTheDocument();
-    expect(screen.getByTestId('react-flow')).toBeInTheDocument();
+    expect(screen.getByText('Interactive AST Dependency Graph')).toBeInTheDocument();
+    expect(screen.getByText(/No dependency graph nodes found/i)).toBeInTheDocument();
   });
 
   it('renders with empty graph data gracefully', () => {
     render(<DependencyGraphView graphData={{ nodes: [], edges: [] }} />);
     
-    expect(screen.getByTestId('nodes-count')).toHaveTextContent('0');
-    expect(screen.getByTestId('edges-count')).toHaveTextContent('0');
+    expect(screen.getByText(/No dependency graph nodes found/i)).toBeInTheDocument();
   });
 
   it('processes and renders nodes and edges correctly', () => {
@@ -59,6 +59,7 @@ describe('DependencyGraphView Component', () => {
     render(<DependencyGraphView graphData={mockData} />);
     
     // Check if the mock ReactFlow received the correct counts
+    expect(screen.getByTestId('react-flow')).toBeInTheDocument();
     expect(screen.getByTestId('nodes-count')).toHaveTextContent('2');
     expect(screen.getByTestId('edges-count')).toHaveTextContent('1');
   });

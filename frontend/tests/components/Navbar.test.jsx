@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Navbar from '../../src/components/Navbar';
 import React from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { useAuthStore } from '../../src/stores/authStore';
 
 // Mock the Auth Store
@@ -32,20 +33,26 @@ describe('Navbar component', () => {
     });
   });
 
+  const renderNavbar = () => render(
+    <MemoryRouter>
+      <Navbar />
+    </MemoryRouter>
+  );
+
   it('renders correctly with brand identity', () => {
-    render(<Navbar />);
+    renderNavbar();
     expect(screen.getByText('Code Migration AI')).toBeInTheDocument();
   });
 
   it('displays user information when logged in', () => {
     useAuthStore.mockReturnValue({
-      user: { full_name: 'John Doe', role: 'admin', organization_name: 'Acme Corp' },
+      user: { full_name: 'John Doe', plan_tier: 'pro', organization_name: 'Acme Corp' },
       logout: mockLogout,
     });
 
-    render(<Navbar />);
+    renderNavbar();
     expect(screen.getByText('John Doe')).toBeInTheDocument();
-    expect(screen.getByText(/admin · Acme Corp/i)).toBeInTheDocument();
+    expect(screen.getByText(/pro Plan · Acme Corp/i)).toBeInTheDocument();
   });
 
   it('falls back to email if full_name is missing', () => {
@@ -54,7 +61,7 @@ describe('Navbar component', () => {
       logout: mockLogout,
     });
 
-    render(<Navbar />);
+    renderNavbar();
     expect(screen.getByText('john@example.com')).toBeInTheDocument();
   });
 
@@ -64,7 +71,7 @@ describe('Navbar component', () => {
       logout: mockLogout,
     });
 
-    render(<Navbar />);
+    renderNavbar();
     const logoutBtn = screen.getByRole('button', { name: /logout/i });
     fireEvent.click(logoutBtn);
     expect(mockLogout).toHaveBeenCalledTimes(1);
@@ -76,17 +83,17 @@ describe('Navbar component', () => {
       isError: true,
     });
 
-    render(<Navbar />);
+    renderNavbar();
     expect(screen.getByText('Service Degraded')).toBeInTheDocument();
   });
 
-  it('displays active workers when query is successful', () => {
+  it('displays all systems operational when health is healthy', () => {
     useQuery.mockReturnValue({
-      data: { celery_workers: 4, queue_depth: 10 },
+      data: { status: 'healthy' },
       isError: false,
     });
 
-    render(<Navbar />);
-    expect(screen.getByText(/4 Workers Active · 10 Queued/i)).toBeInTheDocument();
+    renderNavbar();
+    expect(screen.getByText('All Systems Operational')).toBeInTheDocument();
   });
 });

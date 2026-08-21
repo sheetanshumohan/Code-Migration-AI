@@ -88,7 +88,7 @@ describe('Dashboard Page', () => {
 
     // Verify KPI values are displayed
     expect(screen.getByText('5')).toBeInTheDocument();
-    expect(screen.getByText('Executing now')).toBeInTheDocument();
+    expect(screen.getByText('Running')).toBeInTheDocument();
     expect(screen.getByText('12,500')).toBeInTheDocument();
     expect(screen.getByText('12')).toBeInTheDocument();
     expect(screen.getByText('95%')).toBeInTheDocument();
@@ -108,7 +108,7 @@ describe('Dashboard Page', () => {
     useKpis.mockReturnValue({
       data: {
         active_workflows: 0,
-        ast_nodes: 0, // This triggers the empty state
+        ast_nodes: 0,
         generated_prs: 0,
         sandbox_score: null,
       },
@@ -119,7 +119,7 @@ describe('Dashboard Page', () => {
 
     renderDashboard();
 
-    expect(screen.getByText('No repositories connected yet')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /connect repository/i })).toBeInTheDocument();
+    expect(screen.getByText('No workflow telemetry yet')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /connect repo/i })).toBeInTheDocument();
   });
 });
