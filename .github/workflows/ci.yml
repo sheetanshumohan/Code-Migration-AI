@@ -45,8 +45,9 @@ jobs:
           ruff check backend/
 
       - name: Run MyPy Static Typing
+        working-directory: backend
         run: |
-          mypy backend/app/ --ignore-missing-imports
+          mypy app/ --ignore-missing-imports --explicit-package-bases
 
       - name: Run Bandit Security Analysis
         run: |
