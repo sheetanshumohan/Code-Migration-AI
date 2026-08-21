@@ -1,0 +1,77 @@
+# ==========================================
+# Code Migration AI - Enterprise Dependencies
+# Python 3.12+ Production Stack
+# ==========================================
+
+# Core Web Framework & Async Engine
+fastapi==0.115.11
+uvicorn[standard]==0.34.0
+pydantic>=2.10.6
+pydantic-settings==2.8.1
+email-validator==2.2.0
+python-multipart==0.0.20
+websockets==14.2
+httpx==0.28.1
+stripe>=11.5.0
+
+# Persistence Tier
+SQLAlchemy==2.0.38
+asyncpg==0.30.0
+psycopg2-binary==2.9.10
+alembic==1.14.1
+redis==5.2.1
+hiredis==3.1.0
+neo4j==5.28.1
+qdrant-client==1.13.3
+
+# Distributed Task Queue & Messaging
+celery==5.4.0
+kombu==5.4.2
+
+# Agentic AI & LLM Orchestration
+langgraph>=0.2.74
+langgraph-checkpoint-postgres>=2.0.12
+langchain>=0.3.20
+langchain-core>=0.3.40
+langchain-community>=0.3.19
+langchain-openai>=0.3.7
+langchain-anthropic>=0.3.8
+langchain-google-genai>=2.0.10
+instructor>=1.7.2
+openai>=1.65.0
+anthropic>=0.49.0
+google-generativeai>=0.8.4
+google-genai>=1.5.0
+
+# Repository Intelligence & AST Slicing
+GitPython==3.1.44
+tree-sitter==0.21.3
+tree-sitter-languages==1.10.2
+
+# Authentication & Cryptography
+argon2-cffi==23.1.0
+PyJWT>=2.10.1
+itsdangerous==2.2.0
+authlib==1.4.1
+cryptography==44.0.2
+aiosmtplib>=3.0.2
+
+# Observability & Telemetry
+langsmith>=0.1.0
+opentelemetry-api>=1.30.0
+opentelemetry-sdk>=1.30.0
+opentelemetry-exporter-otlp>=1.30.0
+opentelemetry-instrumentation-fastapi>=0.51b0
+opentelemetry-instrumentation-sqlalchemy>=0.51b0
+prometheus-fastapi-instrumentator==7.0.2
+sentry-sdk[fastapi]==2.22.0
+structlog==25.1.0
+
+# Testing & Static Analysis
+pytest>=8.3.4
+pytest-asyncio>=0.25.3
+pytest-cov>=6.0.0
+ruff>=0.9.9
+mypy>=1.15.0
+bandit>=1.8.3
+semgrep>=1.108.0

@@ -1,0 +1,171 @@
+name: Code Migration AI CD
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cd-production
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Mandatory Production Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Tagged Commit
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # -------------------------
+      # Backend validation
+      # -------------------------
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install Backend Dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff mypy bandit pytest pytest-asyncio pytest-cov httpx
+
+      - name: Run Backend Ruff
+        run: |
+          ruff check backend/
+
+      - name: Run Backend MyPy
+        run: |
+          mypy backend/app/ --ignore-missing-imports
+
+      - name: Run Backend Bandit
+        run: |
+          bandit -r backend/app/ -x "*/tests/*"
+
+      - name: Run Backend Tests
+        working-directory: backend
+        env:
+          ENVIRONMENT: test
+          POSTGRES_ASYNC_URI: ${{ secrets.TEST_POSTGRES_URI }}
+          REDIS_HOST: ${{ secrets.TEST_REDIS_HOST }}
+          REDIS_PORT: ${{ secrets.TEST_REDIS_PORT }}
+          REDIS_PASSWORD: ${{ secrets.TEST_REDIS_PASSWORD }}
+        run: |
+          pytest -v \
+            --cov=app \
+            --cov-report=term-missing \
+            tests/
+
+      # -------------------------
+      # Frontend validation
+      # -------------------------
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: frontend
+        run: |
+          npm ci
+
+      - name: Run Frontend Tests
+        working-directory: frontend
+        run: |
+          npm run test
+
+      - name: Build Frontend
+        working-directory: frontend
+        run: |
+          npm run build
+
+  deploy-backend:
+    name: Deploy Backend to Render
+    needs: validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger Render Deployment
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          DEPLOY_COMMIT_SHA: ${{ github.sha }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "RENDER_DEPLOY_HOOK_URL is not configured."
+            exit 1
+          fi
+
+          curl --fail-with-body \
+            --show-error \
+            --silent \
+            --request POST \
+            --get \
+            --data-urlencode "ref=${DEPLOY_COMMIT_SHA}" \
+            "${RENDER_DEPLOY_HOOK_URL}"
+
+  deploy-frontend:
+    name: Deploy Frontend to Vercel
+    needs: validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: frontend
+        run: |
+          npm ci
+
+      - name: Build Frontend
+        working-directory: frontend
+        run: |
+          npm run build
+
+      - name: Install Vercel CLI
+        run: |
+          npm install --global vercel@latest
+
+      - name: Deploy to Vercel Production
+        working-directory: frontend
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          vercel pull \
+            --yes \
+            --environment=production \
+            --token="$VERCEL_TOKEN"
+
+          vercel build \
+            --prod \
+            --token="$VERCEL_TOKEN"
+
+          vercel deploy \
+            --prebuilt \
+            --prod \
+            --token="$VERCEL_TOKEN"

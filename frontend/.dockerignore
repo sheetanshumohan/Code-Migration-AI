@@ -1,0 +1,15 @@
+node_modules
+dist
+build
+.git
+.github
+.vscode
+.idea
+.env
+.env.*
+!*.example
+tests
+coverage
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

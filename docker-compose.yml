@@ -1,0 +1,99 @@
+services:
+  # ============================================================================
+  # Application Services: FastAPI Backend & Celery Distributed Workers
+  # (Connected to external cloud databases via .env)
+  # ============================================================================
+  backend-api:
+    image: codemigration-backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: codemigration-backend-api
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    env_file:
+      - .env
+    volumes:
+      - workspace_data:/app/data/workspace_sandboxes
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  celery-worker:
+    image: codemigration-backend:latest
+    container_name: codemigration-celery-worker
+    restart: unless-stopped
+    command: celery -A celery_app.celery_app worker --loglevel=info --concurrency=4 -Q migration_jobs,ast_indexing,validation_sandbox
+    depends_on:
+      backend-api:
+        condition: service_started
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    env_file:
+      - .env
+    volumes:
+      - workspace_data:/app/data/workspace_sandboxes
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  # ============================================================================
+  # Frontend Application (React JS + Vite)
+  # ============================================================================
+  frontend:
+    image: codemigration-frontend:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: codemigration-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --spider http://127.0.0.1:3000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ============================================================================
+  # Observability & Metrics
+  # ============================================================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: codemigration-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    depends_on:
+      - backend-api
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: codemigration-grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+volumes:
+  workspace_data:
+  prometheus_data:
+  grafana_data:

@@ -1,0 +1,119 @@
+# ==========================================
+# Code Migration AI - Git Ignore
+# ==========================================
+
+# ------------------------------------------
+# Environment & Secrets
+# ------------------------------------------
+.env
+.env.local
+.env.production
+.env.test
+secrets/
+*.pem
+*.key
+*.cert
+
+# ------------------------------------------
+# Data & Sandboxes (Project Specific)
+# ------------------------------------------
+data/
+backend/data/
+neo4j_data/
+postgres_data/
+qdrant_data/
+redis_data/
+workspace_data/
+*.db
+*.sqlite3
+
+# ------------------------------------------
+# Python & Backend
+# ------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# Testing & Coverage
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+htmlcov/
+.tox/
+
+# Type Checking & Linting
+.mypy_cache/
+.pyre/
+.pytype/
+.ruff_cache/
+
+# ------------------------------------------
+# Node.js & Frontend (React/Vite)
+# ------------------------------------------
+frontend/node_modules/
+node_modules/
+frontend/dist/
+frontend/build/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.eslintcache
+
+# ------------------------------------------
+# OS & IDE
+# ------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+.project
+.settings/
+
+# ------------------------------------------
+# Logs & Scratch
+# ------------------------------------------
+*.log
+scratch/
+tmp/
+temp/
