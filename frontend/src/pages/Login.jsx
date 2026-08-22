@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Sparkles, Shield, ArrowRight, Lock, Mail, Building, Check, X, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
-import api, { getGoogleLoginUrl } from '../services/api';
+import api, { getGoogleLoginUrl, defaultProductionBackend } from '../services/api';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -93,8 +93,15 @@ export default function Login() {
   }, [otpStep, otp, isForgotPassword, isRegister, fullName, orgName, isEmailValid, isPasswordValid, password]);
 
   const handleGoogleLogin = () => {
-    const loginUrl = getGoogleLoginUrl();
-    window.location.href = loginUrl;
+    try {
+      const loginUrl = getGoogleLoginUrl();
+      // Verify valid URL structure before redirecting
+      new URL(loginUrl, window.location.origin);
+      window.location.href = loginUrl;
+    } catch (err) {
+      console.warn('Invalid Google OAuth URL resolved, falling back to production backend:', err);
+      window.location.href = `${defaultProductionBackend}/api/v1/auth/google/login`;
+    }
   };
 
   const handleForgotPassword = async (e) => {

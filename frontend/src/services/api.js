@@ -13,6 +13,11 @@ export function normalizeBackendUrl(input) {
   url = url.replace(/^['"]+|['"]+$/g, '').trim();
   if (!url) return '';
 
+  // Reject placeholder tokens or invalid characters with brackets (e.g. [SENSITIVE], [APP], <APP>)
+  if (/[[\]<>{}|\\^`]/.test(url)) {
+    return '';
+  }
+
   if (url.startsWith('/')) {
     return url.replace(/\/+$/, '');
   }
@@ -23,6 +28,16 @@ export function normalizeBackendUrl(input) {
     } else {
       url = `https://${url}`;
     }
+  }
+
+  // Ensure the constructed URL is strictly valid
+  try {
+    const parsed = new URL(url);
+    if (!parsed.hostname || parsed.hostname.includes('[') || parsed.hostname.includes(']')) {
+      return '';
+    }
+  } catch {
+    return '';
   }
 
   return url.replace(/\/+$/, '');

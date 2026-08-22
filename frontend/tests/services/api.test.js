@@ -94,6 +94,13 @@ describe('API Service', () => {
       expect(normalizeBackendUrl('/api/v1')).toBe('/api/v1');
     });
 
+    it('safely rejects placeholder and invalid URLs containing brackets or illegal characters', async () => {
+      const { normalizeBackendUrl } = await import('../../src/services/api');
+      expect(normalizeBackendUrl('[SENSITIVE]')).toBe('');
+      expect(normalizeBackendUrl('https://[SENSITIVE]/api/v1')).toBe('');
+      expect(normalizeBackendUrl('<YOUR_BACKEND_URL>')).toBe('');
+    });
+
     it('generates correct Google Login and WebSocket URLs', async () => {
       const { getGoogleLoginUrl, getWebSocketUrl } = await import('../../src/services/api');
       const googleUrl = getGoogleLoginUrl();
