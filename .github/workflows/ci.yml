@@ -340,6 +340,9 @@ jobs:
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
           LANGSMITH_PROJECT: ${{ secrets.LANGSMITH_PROJECT || 'codemigration-ai' }}
         run: |
+          echo "Running database schema migrations with Alembic..."
+          alembic upgrade head
+          echo "Starting Uvicorn backend server in background..."
           nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > backend_ci.log 2>&1 &
           echo "Waiting for Backend Server to become healthy on http://localhost:8000/health..."
           for i in {1..30}; do
