@@ -125,14 +125,39 @@ class Settings(BaseSettings):
     QDRANT_COLLECTION_SYMBOLS: str = "codemigration_symbols"
     QDRANT_COLLECTION_DOCS: str = "codemigration_docs"
 
-    # Distributed Task Queue & Cache (Redis)
+    # Distributed Task Queue & Cache (Redis / Upstash)
+    REDIS_URL: str | None = None
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     REDIS_PASSWORD: str | None = None
-    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
-    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
+    REDIS_SSL: bool = False
+    CELERY_BROKER_URL: str | None = None
+    CELERY_RESULT_BACKEND: str | None = None
     CELERY_TASK_TIME_LIMIT_SECONDS: int = 1800
     WORKFLOW_MAX_RETRIES: int = 3
+
+    @field_validator("CELERY_BROKER_URL", mode="before")
+    @classmethod
+    def assemble_celery_broker(cls, v: str | None, info) -> str:
+        if isinstance(v, str) and v:
+            return v
+        data = info.data
+        if data.get("REDIS_URL"):
+            return data["REDIS_URL"]
+        host = data.get("REDIS_HOST", "localhost")
+        port = data.get("REDIS_PORT", 6379)
+        pwd = data.get("REDIS_PASSWORD")
+        is_secure = host not in ("localhost", "127.0.0.1") or data.get("REDIS_SSL", False) or "upstash.io" in str(host)
+        if is_secure:
+            return f"rediss://default:{pwd}@{host}:{port}/0?ssl_cert_reqs=none" if pwd else f"rediss://{host}:{port}/0?ssl_cert_reqs=none"
+        return f"redis://:{pwd}@{host}:{port}/0" if pwd else f"redis://{host}:{port}/0"
+
+    @field_validator("CELERY_RESULT_BACKEND", mode="before")
+    @classmethod
+    def assemble_celery_backend(cls, v: str | None, info) -> str:
+        if isinstance(v, str) and v:
+            return v
+        return cls.assemble_celery_broker(None, info)
 
     # AI & LLM Providers
     OPENAI_API_KEY: str | None = None

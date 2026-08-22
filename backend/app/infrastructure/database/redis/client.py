@@ -47,11 +47,25 @@ class RedisEngine:
             self._loop = None
 
         try:
-            is_secure = settings.REDIS_HOST not in ("localhost", "127.0.0.1")
-            if is_secure:
-                url = f"rediss://default:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}?ssl_cert_reqs=none"
+            if settings.REDIS_URL:
+                url = settings.REDIS_URL
+                if "upstash.io" in url and "ssl_cert_reqs" not in url:
+                    sep = "&" if "?" in url else "?"
+                    url = f"{url}{sep}ssl_cert_reqs=none"
             else:
-                url = f"redis://:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}" if settings.REDIS_PASSWORD else f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}"
+                is_secure = (
+                    settings.REDIS_HOST not in ("localhost", "127.0.0.1")
+                    or settings.REDIS_SSL
+                    or "upstash.io" in settings.REDIS_HOST
+                )
+                if is_secure:
+                    url = f"rediss://default:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}?ssl_cert_reqs=none"
+                else:
+                    url = (
+                        f"redis://:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}"
+                        if settings.REDIS_PASSWORD
+                        else f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}"
+                    )
 
             client = aioredis.from_url(
                 url,
@@ -60,7 +74,7 @@ class RedisEngine:
             )
             await client.ping()
             self._redis = client
-            logger.info("Connected to Redis Engine successfully")
+            logger.info("Connected to Redis Engine successfully (Upstash/Redis)", host=settings.REDIS_HOST)
         except Exception as e:
             self._redis = None
             logger.warning("Could not connect to Redis (will fallback or retry in live env)", error=str(e))
