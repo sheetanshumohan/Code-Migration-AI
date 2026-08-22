@@ -41,22 +41,41 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """Application Lifespan: Manage database connections and cleanup."""
     logger.info("Initializing Code Migration AI platform services...")
 
-    # 1. PostgreSQL Schema Management is now strictly handled by Alembic CLI.
-    # No dynamic create_all() is executed here to prevent production schema drift.
+    # 1. PostgreSQL Schema Management is strictly handled by Alembic CLI.
 
-    # 2. Connect Polyglot Persistence Engines
-    await neo4j_engine.connect()
-    await qdrant_engine.connect()
-    await redis_engine.connect()
+    # 2. Connect Polyglot Persistence Engines safely
+    try:
+        await neo4j_engine.connect()
+    except Exception as e:
+        logger.warning("Neo4j initial connection deferred", error=str(e))
+
+    try:
+        await qdrant_engine.connect()
+    except Exception as e:
+        logger.warning("Qdrant initial connection deferred", error=str(e))
+
+    try:
+        await redis_engine.connect()
+    except Exception as e:
+        logger.warning("Redis initial connection deferred", error=str(e))
 
     logger.info("Code Migration AI platform initialized and ready for traffic.")
     yield
 
     # Teardown
     logger.info("Shutting down Code Migration AI services...")
-    await neo4j_engine.close()
-    await qdrant_engine.close()
-    await redis_engine.close()
+    try:
+        await neo4j_engine.close()
+    except Exception:
+        pass
+    try:
+        await qdrant_engine.close()
+    except Exception:
+        pass
+    try:
+        await redis_engine.close()
+    except Exception:
+        pass
     logger.info("All services shut down cleanly.")
 
 app = FastAPI(
