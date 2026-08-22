@@ -67,7 +67,7 @@ async def validator_node(state: MigrationWorkflowState) -> dict[str, Any]:
     linter_errors = []
     type_check_errors = []
     test_failures = []
-    security_vulnerabilities = []
+    security_vulnerabilities: list[str] = []
 
     if "SyntaxError:" in raw_logs:
         linter_errors.append("SyntaxError detected in AST generated source.")

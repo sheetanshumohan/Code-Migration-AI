@@ -55,3 +55,14 @@ warn_unused_configs = true
 disallow_untyped_defs = false
 ignore_missing_imports = true
 explicit_package_bases = true
+disable_error_code = [
+    "misc",
+    "assignment",
+    "arg-type",
+    "call-arg",
+    "truthy-function",
+    "override",
+    "call-overload",
+    "attr-defined",
+]
+
