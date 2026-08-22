@@ -3,6 +3,7 @@ Multi-LLM Gateway Factory & Dynamic Provider Implementation
 Supports OpenAI, Anthropic, Google Gemini, and Local Ollama with Instructor structured outputs.
 """
 
+import os
 from collections.abc import AsyncGenerator
 from typing import Any, TypeVar, cast
 
