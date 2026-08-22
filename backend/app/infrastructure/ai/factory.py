@@ -59,11 +59,20 @@ T = TypeVar("T", bound=BaseModel)
 
 class OpenAIGateway(BaseLLMGateway):
     def __init__(self) -> None:
-        self.api_key = settings.OPENAI_API_KEY
+        self.api_key = settings.OPENAI_API_KEY or os.getenv("OPENAI_API_KEY")
         self.client = AsyncOpenAI(api_key=self.api_key) if (self.api_key and OPENAI_AVAILABLE and AsyncOpenAI) else None
         self.instructor_client = (
             instructor.from_openai(self.client) if (self.client and INSTRUCTOR_AVAILABLE and instructor) else None
         )
+
+    def _ensure_client(self) -> AsyncOpenAI | None:
+        key = self.api_key or settings.OPENAI_API_KEY or os.getenv("OPENAI_API_KEY")
+        if key and (self.client is None or self.api_key != key) and OPENAI_AVAILABLE and AsyncOpenAI:
+            self.api_key = key
+            self.client = AsyncOpenAI(api_key=key)
+            if INSTRUCTOR_AVAILABLE and instructor:
+                self.instructor_client = instructor.from_openai(self.client)
+        return self.client
 
     @observe(run_type="llm")
     async def generate_text(
@@ -75,7 +84,8 @@ class OpenAIGateway(BaseLLMGateway):
         max_tokens: int = 2048,
     ) -> LLMResponse:
         model_name = model or settings.DEFAULT_FRONTIER_MODEL
-        if not self.client:
+        client = self._ensure_client()
+        if not client:
             logger.warning("OpenAI API key missing for text generation")
             raise ValueError("OpenAI client not configured. Please supply OPENAI_API_KEY.")
 
@@ -97,7 +107,7 @@ class OpenAIGateway(BaseLLMGateway):
         last_err = None
         for m in candidate_models:
             try:
-                resp = await self.client.chat.completions.create(
+                resp = await client.chat.completions.create(
                     model=m,
                     messages=[
                         {"role": "system", "content": system_prompt},
@@ -143,6 +153,7 @@ class OpenAIGateway(BaseLLMGateway):
         temperature: float = 0.1,
     ) -> T:
         model_name = model or settings.DEFAULT_FRONTIER_MODEL
+        self._ensure_client()
         if not self.instructor_client:
             # Return a default instance or mock when API key not set
             logger.warning("OpenAI API key missing, returning fallback structured instance")
@@ -168,7 +179,8 @@ class OpenAIGateway(BaseLLMGateway):
         temperature: float = 0.1,
     ) -> AsyncGenerator[str]:
         model_name = model or settings.DEFAULT_FRONTIER_MODEL
-        if not self.client:
+        client = self._ensure_client()
+        if not client:
             logger.warning("OpenAI API key missing for stream generation")
             raise ValueError("OpenAI client not configured. Please supply OPENAI_API_KEY.")
 
@@ -688,15 +700,15 @@ class LLMGatewayFactory:
     @classmethod
     def get_configured_providers(cls) -> list[str]:
         providers = []
-        if settings.OPENAI_API_KEY:
+        if settings.OPENAI_API_KEY or os.getenv("OPENAI_API_KEY"):
             providers.append("openai")
-        if settings.GEMINI_API_KEY:
+        if settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY"):
             providers.append("gemini")
-        if settings.ANTHROPIC_API_KEY:
+        if settings.ANTHROPIC_API_KEY or os.getenv("ANTHROPIC_API_KEY"):
             providers.append("anthropic")
-        if settings.GROQ_API_KEY:
+        if settings.GROQ_API_KEY or os.getenv("GROQ_API_KEY"):
             providers.append("groq")
-        if settings.PERPLEXITY_API_KEY:
+        if settings.PERPLEXITY_API_KEY or os.getenv("PERPLEXITY_API_KEY"):
             providers.append("perplexity")
         return providers
 

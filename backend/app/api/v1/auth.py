@@ -430,8 +430,13 @@ async def reset_password(req: ResetPasswordRequest, db: AsyncSession = Depends(g
     from app.core.security import decode_token
     try:
         payload = decode_token(req.token)
-        # Validate the token is specifically a reset token (not an access or refresh token)
-        if payload.get("token_type") != "reset":
+        # Validate the token is specifically a reset token (not a standard user access or refresh token)
+        is_reset = (
+            payload.get("token_type") == "reset"
+            or payload.get("role") == "reset"
+            or payload.get("type") == "reset"
+        )
+        if not is_reset:
             raise ValueError("Not a reset token")
         user_id_str = payload.get("sub")
         if not user_id_str:
