@@ -198,7 +198,7 @@ class OpenAIGateway(BaseLLMGateway):
         last_err = None
         for m in candidate_models:
             try:
-                stream = await self.client.chat.completions.create(
+                stream = await client.chat.completions.create(
                     model=m,
                     messages=[
                         {"role": "system", "content": system_prompt},
