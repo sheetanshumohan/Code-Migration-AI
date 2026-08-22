@@ -91,13 +91,23 @@ app = FastAPI(
 from starlette.middleware.sessions import SessionMiddleware
 
 # Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+_origins = [str(o) for o in settings.BACKEND_CORS_ORIGINS] if settings.BACKEND_CORS_ORIGINS else []
+if "*" in _origins or not _origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=r"^https?:\/\/.*$",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Configure Session for Authlib (Google OAuth)
 app.add_middleware(

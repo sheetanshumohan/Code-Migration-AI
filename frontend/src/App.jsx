@@ -32,42 +32,55 @@ function PageLoader({ label = 'Loading page...' }) {
 
 function HealthCheckGate({ children }) {
   const [isHealthy, setIsHealthy] = useState(null);
+  const [isBypassed, setIsBypassed] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
+  const [errorDetails, setErrorDetails] = useState(null);
+
+  const checkHealth = async () => {
+    setIsChecking(true);
+    try {
+      const res = await api.get('/health', { _silent: true, timeout: 60000 });
+      // Accept 'healthy', 'degraded', or any 200 response as active backend
+      if (res.status === 200 && (res.data?.status === 'healthy' || res.data?.status === 'degraded' || res.data?.service === 'codemigration-api')) {
+        setIsHealthy(true);
+        setErrorDetails(null);
+        return true;
+      } else {
+        setIsHealthy(false);
+        setErrorDetails(res.data?.status ? `Service status: ${res.data.status}` : 'Unknown backend status');
+        return false;
+      }
+    } catch (err) {
+      setIsHealthy(false);
+      setErrorDetails(err.message || 'Unable to establish connection to backend API');
+      return false;
+    } finally {
+      setIsChecking(false);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
     let timeoutId;
     
-    const checkHealth = async () => {
-      try {
-        const res = await api.get('/health', { _silent: true });
-        if (mounted) {
-          if (res.data.status === 'healthy') {
-            setIsHealthy(true);
-            // Stop polling once healthy
-            return;
-          } else {
-            setIsHealthy(false);
-          }
-        }
-      } catch (err) {
-        if (mounted) {
-          setIsHealthy(false);
-        }
-      }
-
-      // Schedule next check if still not healthy
-      if (mounted) {
-        timeoutId = setTimeout(checkHealth, 5000);
+    const runCheck = async () => {
+      const ok = await checkHealth();
+      if (!ok && mounted) {
+        timeoutId = setTimeout(runCheck, 6000);
       }
     };
 
-    checkHealth();
+    runCheck();
 
     return () => {
       mounted = false;
       clearTimeout(timeoutId);
     };
   }, []);
+
+  if (isBypassed || isHealthy === true) {
+    return children;
+  }
 
   if (isHealthy === null) {
     return (
@@ -77,24 +90,50 @@ function HealthCheckGate({ children }) {
     );
   }
 
-  if (isHealthy === false) {
-    return (
-      <div className="min-h-screen bg-[#0B0F19] text-gray-100 flex flex-col items-center justify-center font-sans p-4">
-        <AlertTriangle className="w-12 h-12 text-rose-500 mb-4" />
-        <h1 className="text-2xl font-bold text-white mb-2">Services Starting Up...</h1>
-        <p className="text-gray-400 text-center max-w-md mb-6">
-          The Codemigration backend services (PostgreSQL, Neo4j, Qdrant, Redis) are currently booting up or experiencing downtime. 
-          Please wait while we establish a connection.
+  return (
+    <div className="min-h-screen bg-[#0B0F19] text-gray-100 flex flex-col items-center justify-center font-sans p-4">
+      <div className="max-w-md w-full bg-gray-900/80 border border-gray-800 rounded-2xl p-8 shadow-2xl backdrop-blur-xl flex flex-col items-center text-center">
+        <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-6">
+          <AlertTriangle className="w-8 h-8 text-amber-400 animate-pulse" />
+        </div>
+        
+        <h1 className="text-2xl font-bold text-white mb-2">Backend Connection Pending</h1>
+        <p className="text-gray-400 text-sm mb-4 leading-relaxed">
+          The backend service is currently spinning up or establishing connections.
         </p>
-        <div className="flex items-center gap-2 text-sm font-mono text-indigo-400">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          Retrying connection automatically...
+
+        <div className="w-full bg-black/40 border border-gray-800/80 rounded-lg p-3 mb-6 text-left">
+          <div className="text-xs text-gray-500 font-mono mb-1">Target API Base URL:</div>
+          <div className="text-xs text-indigo-400 font-mono break-all mb-2">
+            {api.defaults.baseURL || '/api/v1'}
+          </div>
+          {errorDetails && (
+            <>
+              <div className="text-xs text-gray-500 font-mono mb-1">Diagnostic Detail:</div>
+              <div className="text-xs text-rose-400 font-mono break-all">{errorDetails}</div>
+            </>
+          )}
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 w-full">
+          <button
+            onClick={() => checkHealth()}
+            disabled={isChecking}
+            className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition-all disabled:opacity-50 shadow-lg shadow-indigo-600/20"
+          >
+            <Loader2 className={`w-4 h-4 ${isChecking ? 'animate-spin' : ''}`} />
+            {isChecking ? 'Checking...' : 'Retry Connection'}
+          </button>
+          <button
+            onClick={() => setIsBypassed(true)}
+            className="flex-1 inline-flex items-center justify-center px-4 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium text-sm transition-all border border-gray-700 hover:border-gray-600"
+          >
+            Continue to App
+          </button>
         </div>
       </div>
-    );
-  }
-
-  return children;
+    </div>
+  );
 }
 
 function ProtectedLayout() {

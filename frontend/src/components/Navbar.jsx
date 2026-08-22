@@ -27,13 +27,16 @@ function SystemStatusBadge() {
     );
   }
 
-  const isReady  = health?.status === 'healthy';
+  const isReady = health?.status === 'healthy' || health?.status === 'degraded';
+  const isFullyHealthy = health?.status === 'healthy';
 
   return (
     <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-900/60 border border-gray-800 text-xs text-gray-300">
-      <span className={`w-2 h-2 rounded-full ${isReady ? 'bg-emerald-400 animate-pulse' : 'bg-gray-500'}`} />
-      {isReady
+      <span className={`w-2 h-2 rounded-full ${isFullyHealthy ? 'bg-emerald-400 animate-pulse' : isReady ? 'bg-amber-400' : 'bg-gray-500'}`} />
+      {isFullyHealthy
         ? <span>All Systems Operational</span>
+        : isReady
+        ? <span>Systems Operational (Partial)</span>
         : <span>Checking cluster…</span>
       }
     </div>

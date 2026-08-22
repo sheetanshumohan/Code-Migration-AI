@@ -71,7 +71,12 @@ class Settings(BaseSettings):
     STRIPE_WEBHOOK_SECRET: str | None = None
 
     # Allows a comma-separated string or list to be parsed into a list of origins
-    BACKEND_CORS_ORIGINS: list[str] | str = []
+    BACKEND_CORS_ORIGINS: list[str] | str = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+    ]
 
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod
@@ -88,7 +93,12 @@ class Settings(BaseSettings):
             return [i.strip() for i in v.split(",") if i.strip()]
         elif isinstance(v, list):
             return [str(i) for i in v]
-        return []
+        return [
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
+        ]
 
     # Primary Database (PostgreSQL)
     POSTGRES_SERVER: str = "localhost"

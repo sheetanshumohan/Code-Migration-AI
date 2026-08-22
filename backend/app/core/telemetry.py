@@ -108,13 +108,16 @@ def init_telemetry(app: FastAPI) -> None:
 
     # 3. Sentry Error Tracking
     if settings.SENTRY_DSN and SENTRY_AVAILABLE and sentry_sdk:
-        sentry_sdk.init(
-            dsn=settings.SENTRY_DSN,
-            environment=settings.ENVIRONMENT,
-            traces_sample_rate=1.0 if settings.DEBUG else 0.1,
-            integrations=[
-                FastApiIntegration(),  # type: ignore
-                SqlalchemyIntegration(),  # type: ignore
-            ],
-        )
-        logger.info("Sentry error tracking initialized")
+        try:
+            sentry_sdk.init(
+                dsn=settings.SENTRY_DSN,
+                environment=settings.ENVIRONMENT,
+                traces_sample_rate=1.0 if settings.DEBUG else 0.1,
+                integrations=[
+                    FastApiIntegration(),  # type: ignore
+                    SqlalchemyIntegration(),  # type: ignore
+                ],
+            )
+            logger.info("Sentry error tracking initialized")
+        except Exception as e:
+            logger.warning("Failed to initialize Sentry error tracking", error=str(e))
