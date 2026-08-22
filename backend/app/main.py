@@ -89,6 +89,10 @@ app = FastAPI(
 )
 
 from starlette.middleware.sessions import SessionMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+# Trust X-Forwarded-* headers from reverse proxies (Render, Vercel)
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 # Configure CORS
 _origins = [str(o).rstrip('/') for o in settings.BACKEND_CORS_ORIGINS] if settings.BACKEND_CORS_ORIGINS else []
