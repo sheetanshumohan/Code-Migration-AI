@@ -439,7 +439,7 @@ async def _dispatch_email(to_email: str, subject: str, text_content: str, html_c
     """
     to_email_clean = to_email.strip()
     resend_key = (settings.RESEND_API_KEY or "").strip()
-    resend_from = (settings.RESEND_FROM_EMAIL or "Code Migration AI <onboarding@resend.dev>").strip()
+    resend_from = (settings.RESEND_FROM_EMAIL or "onboarding@resend.dev").strip()
 
     # 1. Resend API Delivery (Primary modern path)
     if resend_key:
@@ -664,6 +664,14 @@ async def google_login(request: Request):
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Google OAuth is not configured on the server. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in backend environment variables.",
         )
+        
+    origin = request.headers.get("origin") or request.headers.get("referer") or ""
+    if origin:
+        from urllib.parse import urlparse
+        parsed = urlparse(origin)
+        if parsed.scheme and parsed.netloc:
+            request.session["frontend_url"] = f"{parsed.scheme}://{parsed.netloc}"
+            
     redirect_uri = str(request.url_for('google_callback'))
     # Ensure HTTPS for production proxy deployments (Render, Cloudflare, etc.)
     if redirect_uri.startswith("http://") and "localhost" not in redirect_uri and "127.0.0.1" not in redirect_uri:
@@ -673,15 +681,7 @@ async def google_login(request: Request):
 
 @router.get("/google/callback")
 async def google_callback(request: Request, db: AsyncSession = Depends(get_async_db)):
-    frontend_base = settings.FRONTEND_URL.rstrip('/')
-    # Fallback to referer/origin if FRONTEND_URL is default localhost in production
-    origin_header = request.headers.get("origin") or request.headers.get("referer") or ""
-    if ("localhost" in frontend_base or "127.0.0.1" in frontend_base) and "vercel.app" in origin_header:
-        # Extract base origin from referer/origin
-        from urllib.parse import urlparse
-        parsed = urlparse(origin_header)
-        if parsed.scheme and parsed.netloc:
-            frontend_base = f"{parsed.scheme}://{parsed.netloc}"
+    frontend_base = request.session.get("frontend_url") or settings.FRONTEND_URL.rstrip('/')
 
     try:
         token = await oauth.google.authorize_access_token(request)

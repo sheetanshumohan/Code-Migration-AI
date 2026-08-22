@@ -53,15 +53,6 @@ export function getBackendBaseUrl() {
     return normalized.replace(/\/api\/v1\/?$/, '').replace(/\/+$/, '');
   }
 
-  const isLocal = typeof window !== 'undefined' && (
-    window.location.hostname === 'localhost' || 
-    window.location.hostname === '127.0.0.1'
-  );
-
-  if (isLocal) {
-    return '';
-  }
-
   return defaultProductionBackend;
 }
 
@@ -70,9 +61,6 @@ export function getBackendBaseUrl() {
  */
 export function getApiBaseUrl() {
   const root = getBackendBaseUrl();
-  if (!root || root === '') {
-    return '/api/v1';
-  }
   return `${root}/api/v1`;
 }
 
@@ -81,9 +69,6 @@ export function getApiBaseUrl() {
  */
 export function getGoogleLoginUrl() {
   const root = getBackendBaseUrl();
-  if (!root || root === '') {
-    return '/api/v1/auth/google/login';
-  }
   return `${root}/api/v1/auth/google/login`;
 }
 
@@ -92,13 +77,8 @@ export function getGoogleLoginUrl() {
  */
 export function getWebSocketUrl(activeWorkflowId, tokenQuery = '') {
   const root = getBackendBaseUrl();
-  if (root && (root.startsWith('http://') || root.startsWith('https://'))) {
-    const wsBase = root.replace(/^http/, 'ws');
-    return `${wsBase}/ws/workflows/${activeWorkflowId}${tokenQuery}`;
-  }
-  const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const host = typeof window !== 'undefined' ? window.location.host : 'localhost:3000';
-  return `${protocol}//${host}/ws/workflows/${activeWorkflowId}${tokenQuery}`;
+  const wsBase = root.replace(/^http/, 'ws');
+  return `${wsBase}/ws/workflows/${activeWorkflowId}${tokenQuery}`;
 }
 
 const api = axios.create({
