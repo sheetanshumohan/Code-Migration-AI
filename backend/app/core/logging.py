@@ -10,6 +10,18 @@ import structlog
 
 from app.core.config import settings
 
+# Prevent UnicodeEncodeError on Windows systems with cp1252 consoles
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+if hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 
 def setup_logging() -> None:
     """Configure structured logging across the entire platform."""

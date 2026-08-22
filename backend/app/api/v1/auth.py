@@ -409,53 +409,52 @@ async def _dispatch_email(to_email: str, subject: str, text_content: str, html_c
                     logger.info("Email delivered successfully via Resend", to=to_email_clean, subject=subject)
                     return
                 else:
-                    logger.error(
+                    logger.warning(
                         f"Resend delivery returned HTTP {res.status_code}: {res.text}. "
-                        f"Note: When using onboarding@resend.dev without a verified domain, Resend only delivers to your own registered account email. "
-                        f"To deliver to any email, verify a custom domain on resend.com or check backend logs for OTP code.",
+                        f"Falling back to SMTP delivery...",
                         status=res.status_code,
-                        body=res.text,
-                        to=to_email_clean
+                        to=to_email_clean,
                     )
         except Exception as e:
-            logger.error("Failed to deliver email via Resend API", error=str(e), to=to_email_clean)
+            logger.warning(f"Failed to deliver email via Resend API: {e}. Falling back to SMTP...", to=to_email_clean)
 
-    # 2. SMTP Delivery (Secondary fallback)
+    # 2. SMTP Delivery (Secondary fallback using Python built-in smtplib)
     if settings.SMTP_HOST and settings.SMTP_USER:
         try:
+            import asyncio
+            import smtplib
             from email.message import EmailMessage
 
-            import aiosmtplib
+            def _send_sync_smtp() -> None:
+                msg = EmailMessage()
+                from_addr = settings.SMTP_FROM_EMAIL or f"Code Migration AI <{settings.SMTP_USER}>"
+                if "gmail.com" in (settings.SMTP_HOST or "").lower() or "noreply" in from_addr.lower():
+                    from_addr = f"Code Migration AI <{settings.SMTP_USER}>"
+                msg["From"] = from_addr
+                msg["To"] = to_email_clean
+                msg["Subject"] = subject
+                msg.set_content(text_content)
+                msg.add_alternative(html_content, subtype="html")
 
-            msg = EmailMessage()
-            msg["From"] = settings.SMTP_FROM_EMAIL
-            msg["To"] = to_email_clean
-            msg["Subject"] = subject
-            msg.set_content(text_content)
-            msg.add_alternative(html_content, subtype="html")
+                port = settings.SMTP_PORT or 587
+                if port == 465:
+                    with smtplib.SMTP_SSL(settings.SMTP_HOST, port, timeout=15) as server:
+                        if settings.SMTP_USER and settings.SMTP_PASSWORD:
+                            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                        server.send_message(msg)
+                else:
+                    with smtplib.SMTP(settings.SMTP_HOST, port, timeout=15) as server:
+                        if settings.SMTP_USE_TLS:
+                            server.starttls()
+                        if settings.SMTP_USER and settings.SMTP_PASSWORD:
+                            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                        server.send_message(msg)
 
-            if settings.SMTP_PORT == 587:
-                await aiosmtplib.send(
-                    msg,
-                    hostname=settings.SMTP_HOST,
-                    port=settings.SMTP_PORT,
-                    username=settings.SMTP_USER,
-                    password=settings.SMTP_PASSWORD,
-                    start_tls=settings.SMTP_USE_TLS,
-                )
-            else:
-                await aiosmtplib.send(
-                    msg,
-                    hostname=settings.SMTP_HOST,
-                    port=settings.SMTP_PORT,
-                    username=settings.SMTP_USER,
-                    password=settings.SMTP_PASSWORD,
-                    use_tls=settings.SMTP_USE_TLS,
-                )
+            await asyncio.to_thread(_send_sync_smtp)
             logger.info("Email delivered successfully via SMTP", to=to_email_clean, subject=subject)
             return
         except Exception as e:
-            logger.error("Failed to deliver email via SMTP", error=str(e), to=to_email_clean)
+            logger.error(f"Failed to deliver email via SMTP: {e}", to=to_email_clean)
 
     # 3. Dev / Test fallback log
     logger.info("Email service not configured or completed — logged email content", to=to_email_clean, subject=subject)
@@ -507,6 +506,7 @@ def generate_otp() -> str:
 async def _send_otp_email(to_email: str, otp_code: str) -> None:
     """Send a one-time verification code via Resend or SMTP."""
     logger.info(f"🔑 [AUTH OTP CODE for {to_email}]: {otp_code}")
+    print(f"\n======================================================\n🔑 [AUTH OTP CODE for {to_email}]: {otp_code}\n======================================================\n", flush=True)
     subject = f"Code Migration AI — Your Verification Code: {otp_code}"
     text_content = (
         f"Your verification code is: {otp_code}\n\n"
