@@ -3,6 +3,8 @@ Pytest Test Fixtures and Global Configuration
 """
 
 from collections.abc import AsyncGenerator
+from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -54,10 +56,51 @@ async def async_client() -> AsyncGenerator[AsyncClient]:
 
     app.dependency_overrides[get_async_db] = override_get_async_db
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://testserver"
-    ) as client:
-        yield client
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
+            yield client
+    finally:
+        app.dependency_overrides.clear()
 
-    app.dependency_overrides.clear()
+@pytest.fixture(autouse=True)
+def mock_redis_engine(monkeypatch):
+    """Provide an isolated in-memory mock for redis_engine during testing."""
+    storage: dict[str, Any] = {}
+
+    async def mock_get_json(key: str) -> Any | None:
+        return storage.get(key)
+
+    async def mock_set_json(key: str, value: Any, ttl_seconds: int = 3600) -> bool:
+        storage[key] = value
+        return True
+
+    async def mock_delete(key: str) -> bool:
+        return storage.pop(key, None) is not None
+
+    async def mock_publish_workflow_event(workflow_id: str, event_data: dict) -> int:
+        history_key = f"workflow_events:{workflow_id}"
+        storage.setdefault(history_key, []).append(event_data)
+        return 1
+
+    async def mock_get_workflow_events(workflow_id: str) -> list[dict]:
+        return storage.get(f"workflow_events:{workflow_id}", [])
+
+    async def mock_connect() -> None:
+        pass
+
+    async def mock_close() -> None:
+        pass
+
+    from app.infrastructure.database.redis.client import redis_engine
+    monkeypatch.setattr(redis_engine, "get_json", mock_get_json)
+    monkeypatch.setattr(redis_engine, "set_json", mock_set_json)
+    monkeypatch.setattr(redis_engine, "delete", mock_delete)
+    monkeypatch.setattr(redis_engine, "publish_workflow_event", mock_publish_workflow_event)
+    monkeypatch.setattr(redis_engine, "get_workflow_events", mock_get_workflow_events)
+    monkeypatch.setattr(redis_engine, "connect", mock_connect)
+    monkeypatch.setattr(redis_engine, "close", mock_close)
+    monkeypatch.setattr(redis_engine, "_ensure_redis", AsyncMock(return_value=None))
+
 

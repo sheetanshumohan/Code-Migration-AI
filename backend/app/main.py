@@ -122,7 +122,13 @@ async def health_check() -> dict:
     except Exception as e:
         logger.error(f"Postgres health check failed: {e}")
 
-    redis_status = "ready" if redis_engine._redis and await redis_engine._redis.ping() else "unhealthy"
+    redis_status = "unhealthy"
+    try:
+        if redis_engine._redis:
+            await redis_engine._redis.ping()
+            redis_status = "ready"
+    except Exception:
+        pass
 
     neo4j_status = "unhealthy"
     try:

@@ -53,14 +53,16 @@ class RedisEngine:
             else:
                 url = f"redis://:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}" if settings.REDIS_PASSWORD else f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}"
 
-            self._redis = aioredis.from_url(
+            client = aioredis.from_url(
                 url,
                 decode_responses=True,
                 max_connections=50,
             )
-            await self._redis.ping()
+            await client.ping()
+            self._redis = client
             logger.info("Connected to Redis Engine successfully")
         except Exception as e:
+            self._redis = None
             logger.warning("Could not connect to Redis (will fallback or retry in live env)", error=str(e))
 
     async def close(self) -> None:
@@ -76,27 +78,39 @@ class RedisEngine:
 
     async def get_json(self, key: str) -> Any | None:
         """Fetch and deserialize a JSON object from cache."""
-        redis = await self._ensure_redis()
-        if not redis:
+        try:
+            redis = await self._ensure_redis()
+            if not redis:
+                return None
+            data = await redis.get(key)
+            return json.loads(data) if data else None
+        except Exception as e:
+            logger.debug(f"Redis get_json failed for key {key}: {e}")
             return None
-        data = await redis.get(key)
-        return json.loads(data) if data else None
 
     async def set_json(self, key: str, value: Any, ttl_seconds: int = 3600) -> bool:
         """Serialize and store a JSON object with TTL."""
-        redis = await self._ensure_redis()
-        if not redis:
+        try:
+            redis = await self._ensure_redis()
+            if not redis:
+                return False
+            result = await redis.set(key, json.dumps(value), ex=ttl_seconds)
+            return bool(result)
+        except Exception as e:
+            logger.debug(f"Redis set_json failed for key {key}: {e}")
             return False
-        result = await redis.set(key, json.dumps(value), ex=ttl_seconds)
-        return bool(result)
 
     async def delete(self, key: str) -> bool:
         """Delete a key from cache."""
-        redis = await self._ensure_redis()
-        if not redis:
+        try:
+            redis = await self._ensure_redis()
+            if not redis:
+                return False
+            result = await redis.delete(key)
+            return bool(result)
+        except Exception as e:
+            logger.debug(f"Redis delete failed for key {key}: {e}")
             return False
-        result = await redis.delete(key)
-        return bool(result)
 
     async def publish_workflow_event(self, workflow_id: str, event_data: dict) -> int:
         """Publish a real-time agent event (e.g. thought, diff, step update) to subscribers and buffer in Redis."""
@@ -115,7 +129,11 @@ class RedisEngine:
             logger.debug(f"Failed to buffer workflow event in Redis: {e}")
 
         channel = f"ws:channel:workflow:{workflow_id}"
-        return await redis.publish(channel, payload)
+        try:
+            return await redis.publish(channel, payload)
+        except Exception as e:
+            logger.debug(f"Failed to publish workflow event to Redis channel {channel}: {e}")
+            return 0
 
     async def get_workflow_events(self, workflow_id: str) -> list[dict]:
         """Fetch all historical events buffered for this workflow."""

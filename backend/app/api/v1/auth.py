@@ -40,12 +40,13 @@ if settings.GOOGLE_CLIENT_ID and settings.GOOGLE_CLIENT_SECRET:
 starlette_config = Config(environ=config_data)
 oauth = OAuth(starlette_config)
 
-if settings.GOOGLE_CLIENT_ID:
-    oauth.register(
-        name='google',
-        server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-        client_kwargs={'scope': 'openid email profile'}
-    )
+oauth.register(
+    name='google',
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_id=settings.GOOGLE_CLIENT_ID or "mock-google-client-id",
+    client_secret=settings.GOOGLE_CLIENT_SECRET or "mock-google-client-secret",
+    client_kwargs={'scope': 'openid email profile'}
+)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
