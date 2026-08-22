@@ -128,24 +128,63 @@ async def register_user(req: RegisterRequest, background_tasks: BackgroundTasks,
             },
         )
 
+import time
+
+_memory_otp_cache: dict[str, tuple[Any, float]] = {}
+
+async def _store_otp(key: str, value: Any, ttl_seconds: int = 300) -> None:
+    """Store OTP in Redis if available, with in-memory TTL fallback."""
+    from app.infrastructure.database.redis.client import redis_engine
+    try:
+        await redis_engine.set_json(key, value, ttl_seconds=ttl_seconds)
+    except Exception as e:
+        logger.debug(f"Redis store_otp skipped/failed: {e}")
+    # Always keep an in-process fallback
+    _memory_otp_cache[key] = (value, time.time() + ttl_seconds)
+
+async def _retrieve_otp(key: str) -> Any | None:
+    """Retrieve OTP from Redis, or in-memory fallback if Redis is offline/unreachable."""
+    from app.infrastructure.database.redis.client import redis_engine
+    try:
+        val = await redis_engine.get_json(key)
+        if val is not None:
+            return val
+    except Exception as e:
+        logger.debug(f"Redis retrieve_otp skipped/failed: {e}")
+
+    if key in _memory_otp_cache:
+        val, expiry = _memory_otp_cache[key]
+        if time.time() < expiry:
+            return val
+        _memory_otp_cache.pop(key, None)
+    return None
+
+async def _delete_otp(key: str) -> None:
+    """Delete OTP from both Redis and in-memory cache."""
+    from app.infrastructure.database.redis.client import redis_engine
+    try:
+        await redis_engine.delete(key)
+    except Exception:
+        pass
+    _memory_otp_cache.pop(key, None)
+
+
     otp = generate_otp()
     payload = {"password": req.password, "full_name": req.full_name, "organization_name": req.organization_name}
-    await redis_engine.set_json(f"register_otp:{req.email}", {"otp": otp, "data": payload}, ttl_seconds=300)
+    await _store_otp(f"register_otp:{req.email}", {"otp": otp, "data": payload}, ttl_seconds=300)
 
     background_tasks.add_task(_send_otp_email, req.email, otp)
     return {"message": f"An OTP has been sent to {req.email}", "requires_otp": True}
 
 @router.post("/verify-register-otp", response_model=TokenResponse)
 async def verify_register_otp(req: VerifyOTPRequest, db: AsyncSession = Depends(get_async_db)) -> Any:
-    from app.infrastructure.database.redis.client import redis_engine
-
-    data = await redis_engine.get_json(f"register_otp:{req.email}")
+    data = await _retrieve_otp(f"register_otp:{req.email}")
     if not data:
         raise HTTPException(status_code=400, detail="OTP expired or invalid email")
 
     if data["otp"] != req.otp:
         # Delete OTP on failed attempt to prevent brute-force enumeration
-        await redis_engine.delete(f"register_otp:{req.email}")
+        await _delete_otp(f"register_otp:{req.email}")
         raise HTTPException(status_code=400, detail="Invalid OTP code. Please request a new one.")
 
     payload = data["data"]
@@ -173,7 +212,7 @@ async def verify_register_otp(req: VerifyOTPRequest, db: AsyncSession = Depends(
     await db.commit()
     await db.refresh(user)
 
-    await redis_engine.delete(f"register_otp:{req.email}")
+    await _delete_otp(f"register_otp:{req.email}")
 
     access_token = create_access_token(subject=user.id, role=user.role, organization_id=str(org.id))
     refresh_token = create_refresh_token(subject=user.id, organization_id=str(org.id))
@@ -227,21 +266,18 @@ async def login_user(req: LoginRequest, background_tasks: BackgroundTasks, db: A
             },
         )
 
-    from app.infrastructure.database.redis.client import redis_engine
     otp = generate_otp()
-    await redis_engine.set_json(f"login_otp:{req.email}", otp, ttl_seconds=300)
+    await _store_otp(f"login_otp:{req.email}", otp, ttl_seconds=300)
 
     background_tasks.add_task(_send_otp_email, req.email, otp)
     return {"message": f"An OTP has been sent to {req.email}", "requires_otp": True}
 
 @router.post("/verify-login-otp", response_model=TokenResponse)
 async def verify_login_otp(req: VerifyOTPRequest, db: AsyncSession = Depends(get_async_db)) -> Any:
-    from app.infrastructure.database.redis.client import redis_engine
-
-    stored_otp = await redis_engine.get_json(f"login_otp:{req.email}")
+    stored_otp = await _retrieve_otp(f"login_otp:{req.email}")
     if not stored_otp or str(stored_otp) != str(req.otp):
         # Delete OTP on failed attempt to prevent brute-force enumeration
-        await redis_engine.delete(f"login_otp:{req.email}")
+        await _delete_otp(f"login_otp:{req.email}")
         raise HTTPException(status_code=400, detail="OTP expired or invalid. Please request a new one.")
 
     stmt = select(User).where(User.email == req.email)
@@ -258,7 +294,7 @@ async def verify_login_otp(req: VerifyOTPRequest, db: AsyncSession = Depends(get
     org_res = await db.execute(org_stmt)
     org = org_res.scalar_one_or_none()
 
-    await redis_engine.delete(f"login_otp:{req.email}")
+    await _delete_otp(f"login_otp:{req.email}")
 
     # Record cryptographic audit log
     from app.core.audit import record_audit_log
@@ -348,32 +384,43 @@ async def _dispatch_email(to_email: str, subject: str, text_content: str, html_c
     Deliver transactional emails via Resend API (preferred) with SMTP fallback.
     Falls back to structured logging in development or test environments.
     """
+    to_email_clean = to_email.strip()
+    resend_key = (settings.RESEND_API_KEY or "").strip()
+    resend_from = (settings.RESEND_FROM_EMAIL or "Code Migration AI <onboarding@resend.dev>").strip()
+
     # 1. Resend API Delivery (Primary modern path)
-    if settings.RESEND_API_KEY:
+    if resend_key:
         try:
             import httpx
             async with httpx.AsyncClient(timeout=10.0) as client:
                 res = await client.post(
                     "https://api.resend.com/emails",
                     headers={
-                        "Authorization": f"Bearer {settings.RESEND_API_KEY}",
+                        "Authorization": f"Bearer {resend_key}",
                         "Content-Type": "application/json",
                     },
                     json={
-                        "from": settings.RESEND_FROM_EMAIL,
-                        "to": [to_email],
+                        "from": resend_from,
+                        "to": [to_email_clean],
                         "subject": subject,
                         "html": html_content,
                         "text": text_content,
                     },
                 )
                 if res.status_code in (200, 201):
-                    logger.info("Email delivered successfully via Resend", to=to_email, subject=subject)
+                    logger.info("Email delivered successfully via Resend", to=to_email_clean, subject=subject)
                     return
                 else:
-                    logger.warning("Resend delivery returned non-200 status", status=res.status_code, body=res.text)
+                    logger.error(
+                        f"Resend delivery returned HTTP {res.status_code}: {res.text}. "
+                        f"Note: When using onboarding@resend.dev without a verified domain, Resend only delivers to your own registered account email. "
+                        f"To deliver to any email, verify a custom domain on resend.com or check backend logs for OTP code.",
+                        status=res.status_code,
+                        body=res.text,
+                        to=to_email_clean
+                    )
         except Exception as e:
-            logger.error("Failed to deliver email via Resend API", error=str(e))
+            logger.error("Failed to deliver email via Resend API", error=str(e), to=to_email_clean)
 
     # 2. SMTP Delivery (Secondary fallback)
     if settings.SMTP_HOST and settings.SMTP_USER:
@@ -384,7 +431,7 @@ async def _dispatch_email(to_email: str, subject: str, text_content: str, html_c
 
             msg = EmailMessage()
             msg["From"] = settings.SMTP_FROM_EMAIL
-            msg["To"] = to_email
+            msg["To"] = to_email_clean
             msg["Subject"] = subject
             msg.set_content(text_content)
             msg.add_alternative(html_content, subtype="html")
@@ -407,17 +454,18 @@ async def _dispatch_email(to_email: str, subject: str, text_content: str, html_c
                     password=settings.SMTP_PASSWORD,
                     use_tls=settings.SMTP_USE_TLS,
                 )
-            logger.info("Email delivered successfully via SMTP", to=to_email, subject=subject)
+            logger.info("Email delivered successfully via SMTP", to=to_email_clean, subject=subject)
             return
         except Exception as e:
-            logger.error("Failed to deliver email via SMTP", error=str(e))
+            logger.error("Failed to deliver email via SMTP", error=str(e), to=to_email_clean)
 
     # 3. Dev / Test fallback log
-    logger.info("Email service not configured — logging email content (dev/test only)", to=to_email, subject=subject)
+    logger.info("Email service not configured or completed — logged email content", to=to_email_clean, subject=subject)
 
 
 async def _send_reset_email(to_email: str, full_name: str, reset_link: str) -> None:
     """Send a password reset email via Resend or SMTP."""
+    logger.info(f"🔗 [PASSWORD RESET LINK for {to_email}]: {reset_link}")
     subject = "Code Migration AI — Reset Your Password"
     text_content = (
         f"Hello {full_name},\n\n"
@@ -460,6 +508,7 @@ def generate_otp() -> str:
 
 async def _send_otp_email(to_email: str, otp_code: str) -> None:
     """Send a one-time verification code via Resend or SMTP."""
+    logger.info(f"🔑 [AUTH OTP CODE for {to_email}]: {otp_code}")
     subject = f"Code Migration AI — Your Verification Code: {otp_code}"
     text_content = (
         f"Your verification code is: {otp_code}\n\n"

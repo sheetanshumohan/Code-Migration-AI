@@ -43,9 +43,18 @@ class Settings(BaseSettings):
     @model_validator(mode="before")
     @classmethod
     def ignore_empty_env_strings(cls, data: Any) -> Any:
-        """Strip empty string environment variables (e.g. from unset CI secrets) so default values take effect."""
+        """Strip empty string environment variables and outer quotes so default/sanitized values take effect."""
         if isinstance(data, dict):
-            return {k: v for k, v in data.items() if not (isinstance(v, str) and v.strip() == "")}
+            cleaned = {}
+            for k, v in data.items():
+                if isinstance(v, str):
+                    v_clean = v.strip().strip("'\"").strip()
+                    if v_clean == "":
+                        continue
+                    cleaned[k] = v_clean
+                else:
+                    cleaned[k] = v
+            return cleaned
         return data
 
     @model_validator(mode="after")
