@@ -492,18 +492,32 @@ async def _dispatch_email(to_email: str, subject: str, text_content: str, html_c
                 msg.add_alternative(html_content, subtype="html")
 
                 port = settings.SMTP_PORT or 587
-                if port == 465:
-                    with smtplib.SMTP_SSL(settings.SMTP_HOST, port, timeout=15) as server:
-                        if settings.SMTP_USER and settings.SMTP_PASSWORD:
-                            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-                        server.send_message(msg)
-                else:
-                    with smtplib.SMTP(settings.SMTP_HOST, port, timeout=15) as server:
-                        if settings.SMTP_USE_TLS:
-                            server.starttls()
-                        if settings.SMTP_USER and settings.SMTP_PASSWORD:
-                            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-                        server.send_message(msg)
+                host = settings.SMTP_HOST
+
+                # Force IPv4 to prevent Render IPv6 routing blackholes with Gmail
+                import socket
+                old_getaddrinfo = socket.getaddrinfo
+                def ipv4_getaddrinfo(h, p, family=0, type=0, proto=0, flags=0):
+                    if h == host:
+                        family = socket.AF_INET
+                    return old_getaddrinfo(h, p, family, type, proto, flags)
+
+                socket.getaddrinfo = ipv4_getaddrinfo
+                try:
+                    if port == 465:
+                        with smtplib.SMTP_SSL(host, port, timeout=15) as server:
+                            if settings.SMTP_USER and settings.SMTP_PASSWORD:
+                                server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                            server.send_message(msg)
+                    else:
+                        with smtplib.SMTP(host, port, timeout=15) as server:
+                            if settings.SMTP_USE_TLS:
+                                server.starttls()
+                            if settings.SMTP_USER and settings.SMTP_PASSWORD:
+                                server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                            server.send_message(msg)
+                finally:
+                    socket.getaddrinfo = old_getaddrinfo
 
             await asyncio.to_thread(_send_sync_smtp)
             logger.info("Email delivered successfully via SMTP", to=to_email_clean, subject=subject)
