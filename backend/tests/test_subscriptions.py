@@ -27,11 +27,9 @@ async def authenticated_user_token(async_client: AsyncClient) -> str:
     # Register (which logs in)
     response = await async_client.post("/api/v1/auth/register", json=payload)
     if response.status_code == 400:
-        # If user already exists, just login
         login_resp = await async_client.post(
             "/api/v1/auth/login",
-            data={"username": payload["email"], "password": payload["password"]},
-            headers={"Content-Type": "application/x-www-form-urlencoded"}
+            json={"email": payload["email"], "password": payload["password"]},
         )
         return str(login_resp.json()["access_token"])
 
