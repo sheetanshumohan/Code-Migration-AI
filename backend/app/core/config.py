@@ -37,6 +37,14 @@ class Settings(BaseSettings):
     SMTP_FROM_EMAIL: str = "noreply@codemigration.ai"
     SMTP_USE_TLS: bool = True
 
+    @model_validator(mode="before")
+    @classmethod
+    def ignore_empty_env_strings(cls, data: Any) -> Any:
+        """Strip empty string environment variables (e.g. from unset CI secrets) so default values take effect."""
+        if isinstance(data, dict):
+            return {k: v for k, v in data.items() if not (isinstance(v, str) and v.strip() == "")}
+        return data
+
     @model_validator(mode="after")
     def validate_production_secrets(self) -> "Settings":
         """Prevent production deployment with default insecure values."""
