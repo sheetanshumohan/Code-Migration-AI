@@ -21,6 +21,15 @@ export default function Login() {
   
   const [otpStep, setOtpStep] = useState(false);
   const [otp, setOtp] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -43,6 +52,7 @@ export default function Login() {
     setShowPassword(false);
     setOtpStep(false);
     setOtp('');
+    setResendCooldown(0);
   };
 
   // Validation helpers
@@ -119,6 +129,31 @@ export default function Login() {
     }
   };
 
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0 || loading) return;
+    setLoading(true);
+    try {
+      if (isRegister) {
+        const res = await api.post('/auth/register', {
+          email: email.trim(),
+          password,
+          full_name: fullName.trim(),
+          organization_name: orgName.trim(),
+        });
+        toast.success(res.data.message || 'New OTP sent to your email.');
+      } else {
+        const res = await api.post('/auth/login', { email: email.trim(), password });
+        toast.success(res.data.message || 'New OTP sent to your email.');
+      }
+      setResendCooldown(30);
+      setOtp('');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to resend OTP.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!isFormValid) return;
@@ -143,12 +178,14 @@ export default function Login() {
           });
           if (res.data.requires_otp) {
             setOtpStep(true);
+            setResendCooldown(30);
             toast.success(res.data.message);
           }
         } else {
           const res = await api.post('/auth/login', { email: email.trim(), password });
           if (res.data.requires_otp) {
             setOtpStep(true);
+            setResendCooldown(30);
             toast.success(res.data.message);
           }
         }
@@ -180,23 +217,54 @@ export default function Login() {
 
         <form onSubmit={isForgotPassword ? handleForgotPassword : handleSubmit} className="space-y-4">
           {otpStep ? (
-            <div>
-              <label className="block text-[11px] font-semibold text-gray-300 uppercase tracking-wider mb-1">
-                Enter 6-Digit OTP
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-indigo-400/70" />
+            <div className="space-y-3">
+              <div className="text-center pb-1">
+                <p className="text-xs text-gray-400">
+                  Enter the 6-digit verification code sent to
+                </p>
+                <p className="text-xs font-semibold text-indigo-400 mt-0.5 break-all">
+                  {email.trim()}
+                </p>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-300 uppercase tracking-wider mb-1">
+                  Enter 6-Digit OTP
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Lock className="h-5 w-5 text-indigo-400/70" />
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    className="block w-full pl-10 pr-3 py-3 rounded-xl border border-indigo-500/20 bg-[#0B0F19]/50 text-white placeholder-gray-500 text-center tracking-[0.25em] font-mono text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 sm:text-sm transition-all"
+                    placeholder="123456"
+                    maxLength={6}
+                    autoFocus
+                  />
                 </div>
-                <input
-                  type="text"
-                  required
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-3 rounded-xl border border-indigo-500/20 bg-[#0B0F19]/50 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 sm:text-sm transition-all"
-                  placeholder="123456"
-                  maxLength={6}
-                />
+              </div>
+              <div className="flex items-center justify-between text-xs pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOtpStep(false);
+                    setOtp('');
+                  }}
+                  className="text-gray-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  &larr; Change Email
+                </button>
+                <button
+                  type="button"
+                  disabled={resendCooldown > 0 || loading}
+                  onClick={handleResendOtp}
+                  className="text-indigo-400 hover:text-indigo-300 disabled:text-gray-500 transition-colors cursor-pointer disabled:cursor-not-allowed font-medium"
+                >
+                  {resendCooldown > 0 ? `Resend Code (${resendCooldown}s)` : 'Resend Code'}
+                </button>
               </div>
             </div>
           ) : !otpStep && !isForgotPassword && isRegister && (
