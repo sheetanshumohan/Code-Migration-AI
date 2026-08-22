@@ -225,6 +225,29 @@ jobs:
             --data-urlencode "ref=${DEPLOY_COMMIT_SHA}" \
             "${RENDER_DEPLOY_HOOK_URL}"
 
+      - name: Verify Live Render Backend Health
+        env:
+          BACKEND_URL: ${{ secrets.RENDER_BACKEND_URL || 'https://code-migration-ai.onrender.com' }}
+        run: |
+          echo "Polling live Render backend health at ${BACKEND_URL}/health..."
+          for i in {1..30}; do
+            RESPONSE=$(curl -s -w "\n%{http_code}" "${BACKEND_URL}/health" || true)
+            HTTP_BODY=$(echo "$RESPONSE" | sed '$d')
+            HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+
+            if [ "$HTTP_STATUS" = "200" ]; then
+              echo "✅ Render Backend is LIVE and HEALTHY! (HTTP 200)"
+              echo "Health Response: $HTTP_BODY"
+              exit 0
+            fi
+
+            echo "Waiting for Render to finish building and deploying ($i/30)... (Status: $HTTP_STATUS)"
+            sleep 10
+          done
+
+          echo "❌ Render deployment verification timed out after 5 minutes."
+          exit 1
+
   deploy-frontend:
     name: Deploy Frontend to Vercel
     needs: validate
@@ -260,3 +283,21 @@ jobs:
           vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
           vercel build --prod --token="$VERCEL_TOKEN"
           vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+      - name: Verify Live Vercel Frontend Accessibility
+        env:
+          FRONTEND_URL: ${{ secrets.VERCEL_FRONTEND_URL || 'https://code-migration-ai.vercel.app' }}
+        run: |
+          echo "Polling live Vercel frontend accessibility at ${FRONTEND_URL}..."
+          for i in {1..12}; do
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${FRONTEND_URL}" || true)
+            if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "304" ]; then
+              echo "✅ Vercel Frontend is LIVE and ACCESSIBLE! (HTTP $HTTP_STATUS)"
+              exit 0
+            fi
+            echo "Waiting for Vercel CDN propagation ($i/12)... (Status: $HTTP_STATUS)"
+            sleep 5
+          done
+
+          echo "❌ Vercel frontend verification timed out."
+          exit 1
