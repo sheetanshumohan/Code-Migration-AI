@@ -94,7 +94,7 @@ async def register_user(req: RegisterRequest, background_tasks: BackgroundTasks,
 
     from app.infrastructure.database.redis.client import redis_engine
 
-    if settings.ENVIRONMENT == "test":
+    if getattr(settings, "DISABLE_AUTH_OTP", False):
         org_slug = req.organization_name.lower().replace(" ", "-")[:50]
         org = Organization(name=req.organization_name, slug=org_slug)
         db.add(org)
@@ -206,7 +206,7 @@ async def login_user(req: LoginRequest, background_tasks: BackgroundTasks, db: A
     if not is_valid:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password.")
 
-    if settings.ENVIRONMENT == "test":
+    if getattr(settings, "DISABLE_AUTH_OTP", False):
         access_token = create_access_token(subject=user.id, role=user.role, organization_id=str(user.organization_id))
         refresh_token = create_refresh_token(subject=user.id, organization_id=str(user.organization_id))
 

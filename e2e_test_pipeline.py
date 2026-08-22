@@ -928,10 +928,15 @@ class MasterE2ETestPipeline:
 
     def _init_redis(self) -> redis.Redis | None:
         """Initialize Redis connection for direct OTP embedding/extraction."""
-        host = os.getenv("REDIS_HOST", "united-shad-137589.upstash.io")
+        host = os.getenv("REDIS_HOST", "localhost")
         port = int(os.getenv("REDIS_PORT", "6379"))
-        password = os.getenv("REDIS_PASSWORD", "gQAAAAAAAhl1AAIgcDE4NzI1ZWRiMjdiNzM0ODBmODBhNjEyMTc0ZTAyMjE5Mw")
-        use_ssl = True if "upstash.io" in host or os.getenv("REDIS_SSL", "true").lower() == "true" else False
+        password = os.getenv("REDIS_PASSWORD", "") or None
+        if host in ("localhost", "127.0.0.1"):
+            use_ssl = False
+            if not os.getenv("REDIS_PASSWORD"):
+                password = None
+        else:
+            use_ssl = True if "upstash.io" in host or os.getenv("REDIS_SSL", "true").lower() in ("true", "1") else False
 
         try:
             r = redis.Redis(
