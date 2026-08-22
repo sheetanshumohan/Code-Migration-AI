@@ -3,7 +3,6 @@ Authentication & Authorization API Routes
 Enterprise JWT authentication, Argon2id verification, Registration, and Refresh tokens.
 """
 
-import json
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
