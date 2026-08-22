@@ -27,6 +27,7 @@ class QdrantVectorEngine:
                 port=settings.QDRANT_PORT,
                 api_key=settings.QDRANT_API_KEY,
                 timeout=settings.QDRANT_TIMEOUT_SECONDS,
+                check_compatibility=False,
             )
             await self._init_collections()
             logger.info("Connected to Qdrant Vector Engine successfully")

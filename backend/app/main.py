@@ -141,6 +141,20 @@ app.include_router(ws_router, prefix=settings.API_V1_STR)
 app.include_router(ws_router)
 
 
+@app.get("/", tags=["Root"])
+@app.head("/", tags=["Root"])
+async def root_ping() -> dict:
+    """Root endpoint for health probes, load balancers, and API discovery."""
+    return {
+        "service": settings.PROJECT_NAME,
+        "version": settings.APP_VERSION,
+        "status": "online",
+        "docs": "/docs",
+        "health": "/health",
+        "api_v1": settings.API_V1_STR,
+    }
+
+
 @app.get("/health", tags=["Health"])
 @app.get(f"{settings.API_V1_STR}/health", tags=["Health"])
 async def health_check() -> dict:
