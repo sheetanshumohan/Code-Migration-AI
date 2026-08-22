@@ -93,9 +93,9 @@ export default function RepositoryExplorer() {
     try {
       const [filesRes, graphRes] = await Promise.all([
         api.get(`/repositories/${activeRepoId}/files`, { _silent: true }),
-        api.get(`/graph/${activeRepoId}`, { _silent: true }),
+        api.get(`/graph/${activeRepoId}`, { _silent: true }).catch(() => ({ data: { nodes: [], edges: [] } })),
       ]);
-      const mapped = filesRes.data.map(f => ({
+      const mapped = (filesRes.data || []).map(f => ({
         name:    f.path,
         type:    f.type,
         loc:     f.loc     || 0,
@@ -103,7 +103,7 @@ export default function RepositoryExplorer() {
       }));
       setFileTree(mapped);
       if (mapped.length > 0) setSelectedFile(mapped[0]);
-      setGraphData(graphRes.data);
+      setGraphData(graphRes.data || { nodes: [], edges: [] });
     } catch (err) {
       setHasError(true);
       setLoadError(err);
@@ -318,17 +318,38 @@ export default function RepositoryExplorer() {
         </div>
       )}
 
-      {/* Data error state */}
+      {/* Data error or syncing state */}
       {hasError && !isLoading && (
-        <ErrorState
-          title="Repository Data Unavailable"
-          message={
-            loadError?.response?.data?.detail ||
-            'Failed to load the AST file index or Neo4j dependency graph. The repository may not be fully cloned yet.'
-          }
-          error={loadError}
-          onRetry={fetchFilesAndGraph}
-        />
+        activeRepo?.sync_status === 'pending' || activeRepo?.sync_status === 'syncing' ? (
+          <div className="flex flex-col items-center justify-center p-12 rounded-2xl bg-gray-900/60 border border-gray-800 text-center max-w-lg mx-auto space-y-4">
+            <div className="w-12 h-12 rounded-full bg-cyan-500/10 flex items-center justify-center text-cyan-400">
+              <RefreshCw className="w-6 h-6 animate-spin" />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-white">Repository Ingestion in Progress</h3>
+              <p className="text-xs text-gray-400 mt-1">
+                The repository is currently cloning and analyzing codebase files. This typically takes a few seconds.
+              </p>
+            </div>
+            <button
+              onClick={fetchFilesAndGraph}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Refresh Status
+            </button>
+          </div>
+        ) : (
+          <ErrorState
+            title="Repository Data Unavailable"
+            message={
+              loadError?.response?.data?.detail ||
+              'Failed to load the file tree or dependency graph. The repository may still be cloning or syncing.'
+            }
+            error={loadError}
+            onRetry={fetchFilesAndGraph}
+          />
+        )
       )}
 
       {/* Blast Radius Result */}

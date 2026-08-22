@@ -6,17 +6,20 @@ Handles Git repository connections, synchronization, AST exploration, and file t
 import os
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import RateLimiter, get_current_user
-from app.core.security import encrypt_secret
+from app.core.logging import get_logger
+from app.core.security import decrypt_secret, encrypt_secret
 from app.infrastructure.database.postgres.models import Project, Repository, User
 from app.infrastructure.database.postgres.session import get_async_db
 from app.infrastructure.repository_intel.git_engine import git_engine
+
+logger = get_logger("codemigration.repositories")
 
 router = APIRouter(prefix="/repositories", tags=["Repositories"])
 
@@ -78,7 +81,6 @@ async def validate_repository_route(
     current_user: User = Depends(get_current_user)
 ) -> Any:
     """Check if a remote git repository exists and is accessible."""
-    from app.infrastructure.repository_intel.git_engine import git_engine
     is_valid = git_engine.validate_repository(req.git_url, req.auth_token)
     if not is_valid:
         raise HTTPException(
@@ -90,6 +92,7 @@ async def validate_repository_route(
 @router.post("/connect", response_model=RepositoryResponse, dependencies=[Depends(RateLimiter(requests=10, window=3600, scope="org"))])
 async def connect_repository(
     req: ConnectRepositoryRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
 ) -> Any:
@@ -108,7 +111,6 @@ async def connect_repository(
         await db.flush()
 
     # Synchronous validation check
-    from app.infrastructure.repository_intel.git_engine import git_engine
     is_valid = git_engine.validate_repository(req.git_url, req.auth_token)
     if not is_valid:
         raise HTTPException(
@@ -149,15 +151,25 @@ async def connect_repository(
         },
     )
 
-    # Trigger Celery background indexing task
-    from celery_app import index_repository_ast_task
+    # Trigger Celery background indexing task with graceful BackgroundTasks fallback
     repo_path = git_engine.get_repo_path(str(current_user.organization_id), str(repo.id))
-    index_repository_ast_task.delay(
-        org_id=str(current_user.organization_id),
-        repo_id=str(repo.id),
-        repo_path=repo_path,
-        repo_url=repo.git_url
-    )
+    try:
+        from celery_app import index_repository_ast_task
+        index_repository_ast_task.delay(
+            org_id=str(current_user.organization_id),
+            repo_id=str(repo.id),
+            repo_path=repo_path,
+            repo_url=repo.git_url
+        )
+    except Exception as e:
+        logger.warning(f"Celery dispatch failed, cloning repository in FastAPI background task: {e}")
+        background_tasks.add_task(
+            git_engine.clone_repository,
+            org_id=str(current_user.organization_id),
+            repo_url=repo.git_url,
+            repo_id=str(repo.id),
+            auth_token=req.auth_token,
+        )
 
     return RepositoryResponse(
         id=str(repo.id),
@@ -199,11 +211,28 @@ async def get_repository_file_tree(
         raise HTTPException(status_code=403, detail="Repository not found or access denied.")
 
     repo_path = git_engine.get_repo_path(str(current_user.organization_id), repo_id)
-    if not os.path.exists(repo_path):
-        raise HTTPException(status_code=404, detail="Repository not found or not cloned yet.")
+    if not os.path.exists(repo_path) or not os.listdir(repo_path):
+        auth_token = decrypt_secret(repo.encrypted_access_token) if repo.encrypted_access_token else None
+        try:
+            await run_in_threadpool(
+                git_engine.clone_repository,
+                org_id=str(current_user.organization_id),
+                repo_url=repo.git_url,
+                repo_id=repo_id,
+                auth_token=auth_token,
+            )
+        except Exception as e:
+            logger.error(f"On-demand repository clone failed: {e}", repo_id=repo_id)
+            if repo.sync_status in ["pending", "syncing"]:
+                return []
+            raise HTTPException(status_code=404, detail="Repository not found or not cloned yet.")
 
-    files = await run_in_threadpool(git_engine.list_repository_files, repo_path)
-    return [{"path": f, "type": "file"} for f in files]
+    try:
+        files = await run_in_threadpool(git_engine.list_repository_files, repo_path)
+        return [{"path": f, "type": "file"} for f in files]
+    except Exception as e:
+        logger.error(f"Failed to list repository files: {e}", repo_id=repo_id)
+        return []
 
 
 @router.delete("/{repo_id}", status_code=204)

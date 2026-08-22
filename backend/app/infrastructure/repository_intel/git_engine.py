@@ -55,15 +55,24 @@ class GitEngine:
             logger.error("Error validating repository", error=str(e))
             return False
 
-    def clone_repository(self, org_id: str, repo_url: str, repo_id: str) -> str:
+    def clone_repository(self, org_id: str, repo_url: str, repo_id: str, auth_token: str | None = None) -> str:
         """Clones a remote repository for analysis."""
         target_path = Path(self.get_repo_path(org_id, repo_id))
-        if target_path.exists():
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        if target_path.exists() and (target_path / ".git").exists():
             logger.info("Repository exists, performing incremental sync", repo_id=repo_id)
             return self.sync_incremental(target_path)
 
+        url_to_clone = repo_url
+        if auth_token:
+            if "://" in repo_url:
+                parts = repo_url.split("://")
+                url_to_clone = f"{parts[0]}://oauth2:{auth_token}@{parts[1]}" if "gitlab" in repo_url else f"{parts[0]}://{auth_token}@{parts[1]}"
+            else:
+                url_to_clone = f"https://{auth_token}@{repo_url}"
+
         logger.info("Cloning repository", url=repo_url, target=str(target_path))
-        git.Repo.clone_from(repo_url, target_path)
+        git.Repo.clone_from(url_to_clone, target_path)
         return str(target_path)
 
     def sync_incremental(self, target_path: Path) -> str:
