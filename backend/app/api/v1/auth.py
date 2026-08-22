@@ -133,8 +133,6 @@ async def register_user(req: RegisterRequest, background_tasks: BackgroundTasks,
             detail="A user with this email already exists.",
         )
 
-    from app.infrastructure.database.redis.client import redis_engine
-
     if getattr(settings, "DISABLE_AUTH_OTP", False):
         org_slug = req.organization_name.lower().replace(" ", "-")[:50]
         org = Organization(name=req.organization_name, slug=org_slug)
