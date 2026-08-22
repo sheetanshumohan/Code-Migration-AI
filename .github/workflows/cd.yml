@@ -2,6 +2,8 @@ name: Code Migration AI CD
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*.*.*"
 
@@ -67,7 +69,7 @@ jobs:
           --health-retries 5
 
     steps:
-      - name: Checkout Tagged Commit
+      - name: Checkout Code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -90,20 +92,20 @@ jobs:
           pip install -r requirements.txt
           pip install ruff mypy bandit pytest pytest-asyncio pytest-cov httpx aiosqlite
 
-      - name: Run Backend Ruff
+      - name: Run Backend Ruff Linter
         run: |
           ruff check backend/
 
-      - name: Run Backend MyPy
+      - name: Run Backend MyPy Type Checker
         working-directory: backend
         run: |
           mypy app/ --ignore-missing-imports --explicit-package-bases
 
-      - name: Run Backend Bandit
+      - name: Run Backend Bandit Security Audit
         run: |
           bandit -c backend/pyproject.toml -r backend/app/ -x "*/tests/*"
 
-      - name: Run Backend Tests
+      - name: Run Backend Unit & Integration Tests
         working-directory: backend
         env:
           ENVIRONMENT: test
@@ -112,6 +114,7 @@ jobs:
           REDIS_HOST: ${{ secrets.REDIS_HOST || 'localhost' }}
           REDIS_PORT: ${{ secrets.REDIS_PORT || '6379' }}
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD || '' }}
+          REDIS_SSL: "false"
           NEO4J_URI: ${{ secrets.NEO4J_URI || 'bolt://localhost:7687' }}
           NEO4J_USER: ${{ secrets.NEO4J_USER || 'neo4j' }}
           NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD || 'testpassword123' }}
@@ -122,6 +125,46 @@ jobs:
             --cov=app \
             --cov-report=term-missing \
             tests/
+
+      - name: Start Backend Server for E2E Gate
+        working-directory: backend
+        env:
+          ENVIRONMENT: test
+          DEBUG: "true"
+          SECRET_KEY: test-secret-key-32-chars-minimum-length-for-ci
+          POSTGRES_ASYNC_URI: ${{ secrets.POSTGRES_ASYNC_URI || 'postgresql+asyncpg://test_user:test_password@localhost:5432/codemigration_test' }}
+          REDIS_HOST: ${{ secrets.REDIS_HOST || 'localhost' }}
+          REDIS_PORT: ${{ secrets.REDIS_PORT || '6379' }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD || '' }}
+          REDIS_SSL: "false"
+          NEO4J_URI: ${{ secrets.NEO4J_URI || 'bolt://localhost:7687' }}
+          NEO4J_USER: ${{ secrets.NEO4J_USER || 'neo4j' }}
+          NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD || 'testpassword123' }}
+          QDRANT_HOST: ${{ secrets.QDRANT_HOST || 'localhost' }}
+          QDRANT_PORT: ${{ secrets.QDRANT_PORT || '6333' }}
+        run: |
+          echo "Running Alembic migrations..."
+          alembic upgrade head
+          nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > backend_cd.log 2>&1 &
+          echo "Waiting for Backend Server to be ready..."
+          for i in {1..30}; do
+            if curl -s http://localhost:8000/health | grep -q "status"; then
+              echo "Backend is ready!"
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Run Multi-Tenant E2E Test Suite
+        env:
+          SECRET_KEY: test-secret-key-32-chars-minimum-length-for-ci
+          POSTGRES_ASYNC_URI: ${{ secrets.POSTGRES_ASYNC_URI || 'postgresql+asyncpg://test_user:test_password@localhost:5432/codemigration_test' }}
+          REDIS_HOST: ${{ secrets.REDIS_HOST || 'localhost' }}
+          REDIS_PORT: ${{ secrets.REDIS_PORT || '6379' }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD || '' }}
+          REDIS_SSL: "false"
+        run: |
+          python e2e_test_pipeline.py --base-url http://localhost:8000
 
       # -------------------------
       # Frontend validation
@@ -144,7 +187,7 @@ jobs:
         run: |
           npm run test
 
-      - name: Build Frontend
+      - name: Build Frontend Production Bundle
         working-directory: frontend
         run: |
           npm run build
