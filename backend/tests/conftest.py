@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import StaticPool
 
 from app.infrastructure.database.postgres.session import Base, get_async_db
 from app.main import app
@@ -19,6 +20,8 @@ TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 test_engine = create_async_engine(
     TEST_DATABASE_URL,
     echo=False,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
 )
 
 TestingSessionLocal = async_sessionmaker(
@@ -28,6 +31,13 @@ TestingSessionLocal = async_sessionmaker(
     autocommit=False,
     autoflush=False,
 )
+
+
+@pytest.fixture(scope="session", autouse=True)
+async def cleanup_engine():
+    """Dispose the test engine at session teardown to prevent hanging threads."""
+    yield
+    await test_engine.dispose()
 
 
 @pytest.fixture(autouse=True)

@@ -198,7 +198,7 @@ jobs:
           pytest -v \
             --cov=app \
             --cov-report=term-missing \
-            --cov-report=xml \
+            --cov-report=xml:coverage.xml \
             tests/
 
       - name: Upload Backend Coverage
