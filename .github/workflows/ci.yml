@@ -51,7 +51,7 @@ jobs:
 
       - name: Run Bandit Security Analysis
         run: |
-          bandit -r backend/app/ -x "*/tests/*"
+          bandit -c backend/pyproject.toml -r backend/app/ -x "*/tests/*"
 
       - name: Run Pytest Unit & Integration Tests
         working-directory: backend

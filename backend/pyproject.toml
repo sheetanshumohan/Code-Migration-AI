@@ -65,4 +65,14 @@ disable_error_code = [
     "call-overload",
     "attr-defined",
 ]
-
+[tool.bandit]
+exclude_dirs = ["tests", "alembic"]
+skips = [
+    "B105",  # hardcoded_password_string heuristics on 'token_type'
+    "B106",  # hardcoded_password_funcarg heuristics on prompt/completion
+    "B110",  # try_except_pass on clean teardown or optional imports
+    "B404",  # blacklist subprocess module import in git_engine
+    "B603",  # subprocess without shell=True in git_engine
+    "B607",  # start_process_with_partial_path in git_engine
+    "B608",  # SQL injection false positives on markdown templates
+]

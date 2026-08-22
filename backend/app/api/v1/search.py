@@ -57,7 +57,7 @@ async def search_repository_code(
         raise HTTPException(status_code=403, detail="Repository not found or access denied.")
 
     # 2. Redis Caching layer
-    cache_key = f"search:{repo_id}:{hashlib.md5(q.encode()).hexdigest()}:{limit}"
+    cache_key = f"search:{repo_id}:{hashlib.sha256(q.encode()).hexdigest()}:{limit}"
     cached_results = await redis_engine.get_json(cache_key)
     if cached_results:
         return [SearchResult(**r) for r in cached_results]
