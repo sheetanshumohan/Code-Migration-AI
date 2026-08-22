@@ -175,7 +175,7 @@ async def register_user(req: RegisterRequest, background_tasks: BackgroundTasks,
     payload = {"password": req.password, "full_name": req.full_name, "organization_name": req.organization_name}
     await _store_otp(f"register_otp:{email_clean}", {"otp": otp, "data": payload, "attempts": 0}, ttl_seconds=300)
 
-    background_tasks.add_task(_send_otp_email, email_clean, otp)
+    await _send_otp_email(email_clean, otp)
     return {"message": f"An OTP has been sent to {email_clean}", "requires_otp": True}
 
 @router.post("/verify-register-otp", response_model=TokenResponse)
@@ -290,7 +290,7 @@ async def login_user(req: LoginRequest, background_tasks: BackgroundTasks, db: A
     otp = generate_otp()
     await _store_otp(f"login_otp:{email_clean}", {"otp": otp, "attempts": 0}, ttl_seconds=300)
 
-    background_tasks.add_task(_send_otp_email, email_clean, otp)
+    await _send_otp_email(email_clean, otp)
     return {"message": f"An OTP has been sent to {email_clean}", "requires_otp": True}
 
 @router.post("/verify-login-otp", response_model=TokenResponse)
@@ -427,7 +427,7 @@ async def forgot_password(req: ForgotPasswordRequest, background_tasks: Backgrou
         reset_link = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
 
         # Try to send real email; fall back to log in dev/test environments
-        background_tasks.add_task(_send_reset_email, user.email, user.full_name, reset_link)
+        await _send_reset_email(user.email, user.full_name, reset_link)
 
     return {"message": "If that email is in our system, a reset link has been sent."}
 
