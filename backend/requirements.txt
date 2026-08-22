@@ -55,6 +55,7 @@ itsdangerous==2.2.0
 authlib==1.4.1
 cryptography==44.0.2
 aiosmtplib>=3.0.2
+resend>=2.6.0
 
 # Observability & Telemetry
 langsmith>=0.1.0

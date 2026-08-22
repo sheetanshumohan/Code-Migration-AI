@@ -30,7 +30,9 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:5173"
     DISABLE_AUTH_OTP: bool = False
 
-    # Email / SMTP (required for real password reset emails)
+    # Email Delivery (Resend API preferred; SMTP fallback)
+    RESEND_API_KEY: str | None = None
+    RESEND_FROM_EMAIL: str = "Code Migration AI <onboarding@resend.dev>"
     SMTP_HOST: str | None = None
     SMTP_PORT: int = 587
     SMTP_USER: str | None = None

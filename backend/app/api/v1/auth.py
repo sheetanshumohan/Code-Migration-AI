@@ -343,54 +343,113 @@ async def forgot_password(req: ForgotPasswordRequest, background_tasks: Backgrou
     return {"message": "If that email is in our system, a reset link has been sent."}
 
 
+async def _dispatch_email(to_email: str, subject: str, text_content: str, html_content: str) -> None:
+    """
+    Deliver transactional emails via Resend API (preferred) with SMTP fallback.
+    Falls back to structured logging in development or test environments.
+    """
+    # 1. Resend API Delivery (Primary modern path)
+    if settings.RESEND_API_KEY:
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                res = await client.post(
+                    "https://api.resend.com/emails",
+                    headers={
+                        "Authorization": f"Bearer {settings.RESEND_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "from": settings.RESEND_FROM_EMAIL,
+                        "to": [to_email],
+                        "subject": subject,
+                        "html": html_content,
+                        "text": text_content,
+                    },
+                )
+                if res.status_code in (200, 201):
+                    logger.info("Email delivered successfully via Resend", to=to_email, subject=subject)
+                    return
+                else:
+                    logger.warning("Resend delivery returned non-200 status", status=res.status_code, body=res.text)
+        except Exception as e:
+            logger.error("Failed to deliver email via Resend API", error=str(e))
+
+    # 2. SMTP Delivery (Secondary fallback)
+    if settings.SMTP_HOST and settings.SMTP_USER:
+        try:
+            from email.message import EmailMessage
+
+            import aiosmtplib
+
+            msg = EmailMessage()
+            msg["From"] = settings.SMTP_FROM_EMAIL
+            msg["To"] = to_email
+            msg["Subject"] = subject
+            msg.set_content(text_content)
+            msg.add_alternative(html_content, subtype="html")
+
+            if settings.SMTP_PORT == 587:
+                await aiosmtplib.send(
+                    msg,
+                    hostname=settings.SMTP_HOST,
+                    port=settings.SMTP_PORT,
+                    username=settings.SMTP_USER,
+                    password=settings.SMTP_PASSWORD,
+                    start_tls=settings.SMTP_USE_TLS,
+                )
+            else:
+                await aiosmtplib.send(
+                    msg,
+                    hostname=settings.SMTP_HOST,
+                    port=settings.SMTP_PORT,
+                    username=settings.SMTP_USER,
+                    password=settings.SMTP_PASSWORD,
+                    use_tls=settings.SMTP_USE_TLS,
+                )
+            logger.info("Email delivered successfully via SMTP", to=to_email, subject=subject)
+            return
+        except Exception as e:
+            logger.error("Failed to deliver email via SMTP", error=str(e))
+
+    # 3. Dev / Test fallback log
+    logger.info("Email service not configured — logging email content (dev/test only)", to=to_email, subject=subject)
+
+
 async def _send_reset_email(to_email: str, full_name: str, reset_link: str) -> None:
-    """Send a password reset email via SMTP. Falls back to structured log when SMTP is not configured."""
-    subject = "Code Migration AI — Password Reset Request"
-    body = (
+    """Send a password reset email via Resend or SMTP."""
+    subject = "Code Migration AI — Reset Your Password"
+    text_content = (
         f"Hello {full_name},\n\n"
         f"We received a request to reset your Code Migration AI password.\n\n"
         f"Click the link below to set a new password (valid for 15 minutes):\n{reset_link}\n\n"
         f"If you did not request a password reset, you can safely ignore this email.\n\n"
         f"— The Code Migration AI Team"
     )
-    if not settings.SMTP_HOST or not settings.SMTP_USER:
-        logger.info(
-            "SMTP not configured — password reset link (dev/test only)",
-            to=to_email,
-            link=reset_link,
-        )
-        return
-
-    try:
-        from email.message import EmailMessage
-
-        import aiosmtplib
-        msg = EmailMessage()
-        msg["From"] = settings.SMTP_FROM_EMAIL
-        msg["To"] = to_email
-        msg["Subject"] = subject
-        msg.set_content(body)
-
-        if settings.SMTP_PORT == 587:
-            await aiosmtplib.send(
-                msg,
-                hostname=settings.SMTP_HOST,
-                port=settings.SMTP_PORT,
-                username=settings.SMTP_USER,
-                password=settings.SMTP_PASSWORD,
-                start_tls=settings.SMTP_USE_TLS,
-            )
-        else:
-            await aiosmtplib.send(
-                msg,
-                hostname=settings.SMTP_HOST,
-                port=settings.SMTP_PORT,
-                username=settings.SMTP_USER,
-                password=settings.SMTP_PASSWORD,
-                use_tls=settings.SMTP_USE_TLS,
-            )
-    except Exception as e:
-        logger.error("Failed to send password reset email", error=str(e))
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"></head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0f172a; color: #f8fafc; padding: 40px 20px; margin: 0;">
+      <div style="max-width: 560px; margin: 0 auto; background-color: #1e293b; border-radius: 12px; border: 1px solid #334155; padding: 32px; box-shadow: 0 4px 20px rgba(0,0,0,0.4);">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <h2 style="color: #38bdf8; margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.5px;">Code Migration AI</h2>
+          <p style="color: #94a3b8; font-size: 14px; margin-top: 4px;">Enterprise Agentic Modernization Platform</p>
+        </div>
+        <h3 style="color: #f1f5f9; font-size: 18px; margin-top: 0;">Password Reset Request</h3>
+        <p style="color: #cbd5e1; font-size: 15px; line-height: 1.6;">Hello <strong>{full_name}</strong>,</p>
+        <p style="color: #cbd5e1; font-size: 15px; line-height: 1.6;">We received a request to reset the password associated with your account. Click the button below to choose a new password:</p>
+        <div style="text-align: center; margin: 32px 0;">
+          <a href="{reset_link}" style="background-color: #2563eb; color: #ffffff; padding: 12px 28px; font-size: 15px; font-weight: 600; text-decoration: none; border-radius: 8px; display: inline-block; box-shadow: 0 2px 8px rgba(37,99,235,0.4);">Reset Password</a>
+        </div>
+        <p style="color: #94a3b8; font-size: 13px; line-height: 1.5;">This reset link is valid for <strong>15 minutes</strong>. If you did not make this request, no changes have been made to your account and you can safely ignore this message.</p>
+        <hr style="border: 0; border-top: 1px solid #334155; margin: 24px 0;">
+        <p style="color: #64748b; font-size: 12px; text-align: center; margin: 0;">&copy; 2026 Code Migration AI. All rights reserved.</p>
+      </div>
+    </body>
+    </html>
+    """
+    await _dispatch_email(to_email, subject, text_content, html_content)
 
 
 def generate_otp() -> str:
@@ -398,28 +457,39 @@ def generate_otp() -> str:
     import secrets
     return str(secrets.randbelow(900000) + 100000)
 
+
 async def _send_otp_email(to_email: str, otp_code: str) -> None:
-    subject = "Code Migration AI — Verification Code"
-    body = f"Your verification code is: {otp_code}\n\nIt expires in 5 minutes.\n\n— The Code Migration AI Team"
-    if not settings.SMTP_HOST or not settings.SMTP_USER:
-        logger.info("SMTP not configured — OTP code (dev/test only)", to=to_email, otp=otp_code)
-        return
-
-    try:
-        from email.message import EmailMessage
-
-        import aiosmtplib
-        msg = EmailMessage()
-        msg["From"] = settings.SMTP_FROM_EMAIL
-        msg["To"] = to_email
-        msg["Subject"] = subject
-        msg.set_content(body)
-        if settings.SMTP_PORT == 587:
-            await aiosmtplib.send(msg, hostname=settings.SMTP_HOST, port=settings.SMTP_PORT, username=settings.SMTP_USER, password=settings.SMTP_PASSWORD, start_tls=settings.SMTP_USE_TLS)
-        else:
-            await aiosmtplib.send(msg, hostname=settings.SMTP_HOST, port=settings.SMTP_PORT, username=settings.SMTP_USER, password=settings.SMTP_PASSWORD, use_tls=settings.SMTP_USE_TLS)
-    except Exception as e:
-        logger.error("Failed to send OTP email", error=str(e))
+    """Send a one-time verification code via Resend or SMTP."""
+    subject = f"Code Migration AI — Your Verification Code: {otp_code}"
+    text_content = (
+        f"Your verification code is: {otp_code}\n\n"
+        f"It expires in 5 minutes.\n\n"
+        f"— The Code Migration AI Team"
+    )
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"></head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0f172a; color: #f8fafc; padding: 40px 20px; margin: 0;">
+      <div style="max-width: 520px; margin: 0 auto; background-color: #1e293b; border-radius: 12px; border: 1px solid #334155; padding: 32px; box-shadow: 0 4px 20px rgba(0,0,0,0.4);">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <h2 style="color: #38bdf8; margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.5px;">Code Migration AI</h2>
+          <p style="color: #94a3b8; font-size: 14px; margin-top: 4px;">Two-Factor Authentication</p>
+        </div>
+        <p style="color: #cbd5e1; font-size: 15px; line-height: 1.6; text-align: center;">Use the verification code below to complete your sign-in or registration:</p>
+        <div style="text-align: center; margin: 28px 0;">
+          <div style="display: inline-block; background-color: #0f172a; border: 2px solid #38bdf8; border-radius: 10px; padding: 14px 32px; font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #38bdf8; font-family: monospace;">
+            {otp_code}
+          </div>
+        </div>
+        <p style="color: #94a3b8; font-size: 13px; line-height: 1.5; text-align: center;">This code will expire in <strong>5 minutes</strong>. Never share this code with anyone.</p>
+        <hr style="border: 0; border-top: 1px solid #334155; margin: 24px 0;">
+        <p style="color: #64748b; font-size: 12px; text-align: center; margin: 0;">&copy; 2026 Code Migration AI. All rights reserved.</p>
+      </div>
+    </body>
+    </html>
+    """
+    await _dispatch_email(to_email, subject, text_content, html_content)
 
 class ResetPasswordRequest(BaseModel):
     token: str
