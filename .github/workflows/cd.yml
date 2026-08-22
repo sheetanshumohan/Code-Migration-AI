@@ -142,6 +142,15 @@ jobs:
           NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD || 'testpassword123' }}
           QDRANT_HOST: ${{ secrets.QDRANT_HOST || 'localhost' }}
           QDRANT_PORT: ${{ secrets.QDRANT_PORT || '6333' }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          LANGSMITH_TRACING: "true"
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          LANGSMITH_PROJECT: ${{ secrets.LANGSMITH_PROJECT || 'codemigration-ai' }}
         run: |
           echo "Running Alembic migrations..."
           alembic upgrade head
