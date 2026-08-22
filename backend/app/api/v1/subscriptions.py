@@ -98,13 +98,8 @@ async def confirm_checkout_session(
     if payment_status not in ("paid", "no_payment_required"):
         raise HTTPException(status_code=400, detail="Payment is not complete on Stripe.")
 
-    meta = session_data.get("metadata") or {}
-    plan_tier = meta.get("plan_tier")
-    if not plan_tier and hasattr(session, "metadata"):
-        try:
-            plan_tier = session.metadata["plan_tier"]
-        except Exception:
-            pass
+    meta = session_data.get("metadata") or getattr(session, "metadata", None) or {}
+    plan_tier = meta.get("plan_tier") if hasattr(meta, "get") else None
 
     if not plan_tier:
         raise HTTPException(status_code=400, detail="Missing plan metadata in Stripe session.")
@@ -166,10 +161,10 @@ async def stripe_webhook(request: Request, db: AsyncSession = Depends(get_async_
     if event['type'] == 'checkout.session.completed':
         session_obj = event['data']['object']
         session_data = session_obj.to_dict() if hasattr(session_obj, "to_dict") else dict(session_obj)
-        meta = session_data.get("metadata") or {}
+        meta = session_data.get("metadata") or getattr(session_obj, "metadata", None) or {}
 
-        org_id_str = meta.get("organization_id")
-        plan_tier = meta.get("plan_tier")
+        org_id_str = meta.get("organization_id") if hasattr(meta, "get") else None
+        plan_tier = meta.get("plan_tier") if hasattr(meta, "get") else None
         customer_id = session_data.get("customer")
         subscription_id = session_data.get("subscription")
 

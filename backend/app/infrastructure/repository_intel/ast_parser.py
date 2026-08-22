@@ -51,32 +51,48 @@ class ASTSymbolParser:
         if language in self._parsers:
             return self._parsers[language]
 
+        parser = None
         try:
-            ts_lang = tree_sitter_languages.get_language(language)
+            # 1. Primary: tree_sitter_languages provides a ready-made parser
+            if hasattr(tree_sitter_languages, "get_parser"):
+                try:
+                    parser = tree_sitter_languages.get_parser(language)
+                except Exception:
+                    parser = None
 
-            # tree-sitter >= 0.22.0 has removed set_language and expects a Language object in the constructor.
-            # However, tree_sitter_languages may return an incompatible Language object from an older bundled version.
-            # We must recreate the Language object using the new API if possible.
-            try:
-                # Check if we are using newer tree-sitter API
-                if not hasattr(Parser, "set_language"):
-                    from tree_sitter import Language
-                    # Reconstruct the Language object using the pointer from the old object
-                    if hasattr(ts_lang, "language_id"): # tree_sitter_languages older Language object
-                        ts_lang = Language(ts_lang.language_id, language)
-                    elif hasattr(ts_lang, "ptr"): # Newer object
-                        ts_lang = Language(ts_lang.ptr, language)
+            # 2. Fallback: Manual initialization supporting both old (<0.22) and new (>=0.22) tree-sitter APIs
+            if parser is None:
+                ts_lang = tree_sitter_languages.get_language(language)
+
+                # Modern API (tree-sitter >= 0.22.0): Parser accepts language in constructor
+                try:
                     parser = Parser(ts_lang)
-                else:
-                    # Old API fallback
-                    parser = Parser()
-                    parser.set_language(ts_lang)
-            except Exception:
-                # If reconstruction fails, just try the constructor directly (might work on some versions)
-                parser = Parser(ts_lang)
+                except Exception:
+                    try:
+                        parser = Parser()
+                    except Exception:
+                        parser = None
 
-            self._parsers[language] = parser
-            return parser
+                if parser is not None:
+                    # Modern API (tree-sitter >= 0.22.0): property assignment
+                    if hasattr(parser, "language"):
+                        try:
+                            parser.language = ts_lang
+                        except Exception:
+                            pass
+                    # Legacy API (tree-sitter < 0.22.0): set_language method
+                    if hasattr(parser, "set_language") and callable(getattr(parser, "set_language", None)):
+                        try:
+                            parser.set_language(ts_lang)
+                        except Exception:
+                            pass
+
+            if parser is not None:
+                self._parsers[language] = parser
+                return parser
+
+            logger.warning("Could not initialize Tree-sitter parser for language", language=language)
+            return None
         except Exception as e:
             logger.warning("Could not initialize Tree-sitter parser for language", language=language, error=str(e))
             return None
