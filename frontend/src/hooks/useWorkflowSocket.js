@@ -31,17 +31,15 @@ export function useWorkflowSocket(activeWorkflowId, setActiveStepIndex, setAwait
 
     const token = localStorage.getItem('codemigration_token') || '';
     const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : '';
-    const apiBase = import.meta.env.VITE_API_BASE_URL;
+    const rawApiUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL;
     let wsUrl;
 
-    if (apiBase && (apiBase.startsWith('http://') || apiBase.startsWith('https://'))) {
-      const wsBase = apiBase.replace(/^http/, 'ws').replace(/\/+$/, '');
+    if (rawApiUrl && (rawApiUrl.startsWith('http://') || rawApiUrl.startsWith('https://'))) {
+      const wsBase = rawApiUrl.replace(/^http/, 'ws').replace(/\/api\/v1\/?$/, '').replace(/\/+$/, '');
       wsUrl = `${wsBase}/ws/workflows/${activeWorkflowId}${tokenQuery}`;
     } else {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const base = (apiBase || '/api/v1').replace(/\/+$/, '');
-      const prefix = base.startsWith('/') ? base : `/${base}`;
-      wsUrl = `${protocol}//${window.location.host}${prefix}/ws/workflows/${activeWorkflowId}${tokenQuery}`;
+      wsUrl = `${protocol}//${window.location.host}/ws/workflows/${activeWorkflowId}${tokenQuery}`;
     }
 
     let socket;

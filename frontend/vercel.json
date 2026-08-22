@@ -1,0 +1,20 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/v1/:match*",
+      "destination": "https://code-migration-ai.onrender.com/api/v1/:match*"
+    },
+    {
+      "source": "/health",
+      "destination": "https://code-migration-ai.onrender.com/health"
+    },
+    {
+      "source": "/docs",
+      "destination": "https://code-migration-ai.onrender.com/docs"
+    },
+    {
+      "source": "/((?!api/|ws/|health|docs).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
