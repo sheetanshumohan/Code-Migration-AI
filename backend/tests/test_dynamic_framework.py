@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.api.v1.workflows import StartMigrationRequest
-from app.infrastructure.agents.nodes.planner import planner_node
+from app.infrastructure.agents.nodes.planner import PlanOutputSchema, TaskItemSchema, planner_node
 from app.infrastructure.agents.state import MigrationWorkflowState
 
 pytestmark = pytest.mark.asyncio
@@ -77,34 +77,33 @@ async def test_planner_node_dynamic_prompt_injection(mock_dynamic_repo_state):
     """
     with patch("app.infrastructure.agents.nodes.planner.llm_factory.get_gateway") as mock_get_llm:
 
-        # Mock LLM API response to prevent live network calls
+        # Mock LLM API response to return structured PlanOutputSchema
         mock_llm_instance = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.content = '''
-        ```json
-        {
-            "plan": [
-                {"title": "Setup Zustand", "target_files": ["store.js"]}
-            ]
-        }
-        ```
-        '''
-        mock_response.total_tokens = 200
-        mock_response.estimated_cost_usd = 0.002
+        mock_plan = PlanOutputSchema(
+            summary="Migrate Redux store to Zustand hooks",
+            tasks=[
+                TaskItemSchema(
+                    id="task_1",
+                    title="Setup Zustand",
+                    description="Configure Zustand stores",
+                    target_files=["store.js"],
+                    dependencies=[],
+                )
+            ],
+        )
 
-        # Keep track of what prompt was passed to the LLM
-        mock_llm_instance.generate_text.return_value = mock_response
+        mock_llm_instance.generate_structured.return_value = mock_plan
         mock_get_llm.return_value = mock_llm_instance
 
         # Execute node
         result = await planner_node(mock_dynamic_repo_state)
 
-        # Ensure the LLM was called
-        mock_llm_instance.generate_text.assert_called_once()
+        # Ensure generate_structured was called
+        mock_llm_instance.generate_structured.assert_called_once()
 
         # Extract the prompt passed to the LLM
-        call_args = mock_llm_instance.generate_text.call_args
-        prompt_used = call_args[1].get('prompt') or call_args[0][0]
+        call_kwargs = mock_llm_instance.generate_structured.call_args[1]
+        prompt_used = call_kwargs.get("system_prompt") or mock_llm_instance.generate_structured.call_args[0][0]
 
         # Verify our custom dynamic inputs made it into the prompt!
         assert "Redux Legacy" in prompt_used
