@@ -99,9 +99,14 @@ async def refactor_node(state: MigrationWorkflowState) -> dict[str, Any]:
         elif not norm_tf.endswith('/') and norm_tf not in ("root", ".") and _is_refactorable(tf):
             expanded_files.append(tf)
 
-    # Validate that every target file is a concrete file on disk
+    # Validate that every target file is a concrete file on disk (or valid relative path in mock/test runs)
+    repo_exists = os.path.exists(state.get("repo_path", ""))
     target_files: list[str] = []
     for f in list(dict.fromkeys(expanded_files)):
+        if not repo_exists:
+            if _is_refactorable(f):
+                target_files.append(f)
+            continue
         full_p = os.path.join(state["repo_path"], f)
         if os.path.isfile(full_p) and _is_refactorable(f):
             target_files.append(f)
@@ -132,10 +137,11 @@ async def refactor_node(state: MigrationWorkflowState) -> dict[str, Any]:
             logger.info(f"Skipping non-code/config file {rel_file} during refactoring.")
             continue
 
-        full_disk_path = os.path.join(state["repo_path"], rel_file)
-        if not os.path.isfile(full_disk_path):
-            logger.info(f"Skipping non-file path {rel_file}.")
-            continue
+        if repo_exists:
+            full_disk_path = os.path.join(state["repo_path"], rel_file)
+            if not os.path.isfile(full_disk_path):
+                logger.info(f"Skipping non-file path {rel_file}.")
+                continue
 
         try:
             original_code = git_engine.read_file_content(state["repo_path"], rel_file)

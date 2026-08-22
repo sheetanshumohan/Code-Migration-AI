@@ -21,9 +21,6 @@ async def create_checkout_session(
     db: AsyncSession = Depends(get_async_db)
 ) -> Any:
     """Create a Stripe checkout session for subscription."""
-    if not stripe.api_key:
-        raise HTTPException(status_code=500, detail="Stripe is not configured on the server.")
-
     # Pricing logic driven by settings (configurable without a code deploy)
     prices = {
         "pro": {
@@ -46,6 +43,11 @@ async def create_checkout_session(
 
     if plan not in prices:
         raise HTTPException(status_code=400, detail="Invalid plan selected.")
+
+    stripe_key = settings.STRIPE_SECRET_KEY or stripe.api_key
+    if not stripe_key:
+        raise HTTPException(status_code=500, detail="Stripe is not configured on the server.")
+    stripe.api_key = stripe_key
 
     # Get frontend URL from config
     frontend_url = settings.FRONTEND_URL
@@ -84,8 +86,10 @@ async def confirm_checkout_session(
     db: AsyncSession = Depends(get_async_db)
 ) -> Any:
     """Verify completed Stripe checkout session directly and activate subscription."""
-    if not stripe.api_key:
+    stripe_key = settings.STRIPE_SECRET_KEY or stripe.api_key
+    if not stripe_key:
         raise HTTPException(status_code=500, detail="Stripe is not configured on the server.")
+    stripe.api_key = stripe_key
 
     try:
         session = stripe.checkout.Session.retrieve(req.session_id)

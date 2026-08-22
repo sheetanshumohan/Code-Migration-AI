@@ -106,12 +106,18 @@ async def planner_node(state: MigrationWorkflowState) -> dict[str, Any]:
     else:
         files_representation = f"{source_files}"
 
+    target_framework = state.get('target_framework') or 'Modern'
+    target_language = state.get('target_language') or 'modern language standards'
+    custom_goal = state.get('custom_goal') or 'Full modernization with 100% behavioral equivalence'
+
     prompt = f"""You are PlannerAgent, Principal Migration Architect.
 Decompose the codebase migration into an ordered Directed Acyclic Graph (DAG) of atomic transformation tasks.
 
 CONTEXT:
-Workflow: {state['workflow_type']} | Source: {state.get('source_framework') or 'Legacy'} -> Target: {state.get('target_framework') or 'Modern'}
-Goal: {state.get('custom_goal') or 'Full modernization with 100% behavioral equivalence'}
+Workflow: {state['workflow_type']} | Source: {state.get('source_framework') or 'Legacy'} -> Target: {target_framework} ({target_language})
+Target Framework: {target_framework}
+Target Language: {target_language}
+Goal: {custom_goal}
 Source Files ({len(source_files)} total): {files_representation}
 Graph Context: {graph_context}
 
