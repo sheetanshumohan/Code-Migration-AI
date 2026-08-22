@@ -1,6 +1,6 @@
 import os
 import uuid
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -36,7 +36,7 @@ async def test_genuine_refactor_node_integration(real_repo_fixture):
 
     # We patch only the exact HTTP-level completion call to prevent burning OpenAI credits,
     # but the entire LLM Gateway, telemetry, factory, and git_engine will run genuinely.
-    with patch("openai.resources.chat.completions.AsyncCompletions.create") as mock_openai_create, \
+    with patch("openai.resources.chat.completions.AsyncCompletions.create", new_callable=AsyncMock) as mock_openai_create, \
          patch("app.infrastructure.agents.nodes.refactor.redis_engine.publish_workflow_event"): # Mute redis pubsub
 
         # Build a realistic looking OpenAI response object
