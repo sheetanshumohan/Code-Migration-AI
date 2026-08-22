@@ -558,13 +558,29 @@ async def get_current_user_profile(
 @router.get("/google/login")
 async def google_login(request: Request):
     if not settings.GOOGLE_CLIENT_ID:
-        raise HTTPException(status_code=500, detail="Google Auth is not configured")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google OAuth is not configured on the server. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in backend environment variables.",
+        )
     redirect_uri = str(request.url_for('google_callback'))
+    # Ensure HTTPS for production proxy deployments (Render, Cloudflare, etc.)
+    if redirect_uri.startswith("http://") and "localhost" not in redirect_uri and "127.0.0.1" not in redirect_uri:
+        redirect_uri = redirect_uri.replace("http://", "https://", 1)
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 
 @router.get("/google/callback")
 async def google_callback(request: Request, db: AsyncSession = Depends(get_async_db)):
+    frontend_base = settings.FRONTEND_URL.rstrip('/')
+    # Fallback to referer/origin if FRONTEND_URL is default localhost in production
+    origin_header = request.headers.get("origin") or request.headers.get("referer") or ""
+    if ("localhost" in frontend_base or "127.0.0.1" in frontend_base) and "vercel.app" in origin_header:
+        # Extract base origin from referer/origin
+        from urllib.parse import urlparse
+        parsed = urlparse(origin_header)
+        if parsed.scheme and parsed.netloc:
+            frontend_base = f"{parsed.scheme}://{parsed.netloc}"
+
     try:
         token = await oauth.google.authorize_access_token(request)
         userinfo = token.get('userinfo')
@@ -572,11 +588,11 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_async
             raise ValueError("No userinfo returned from Google OAuth")
     except Exception as e:
         logger.error(f"Google Auth Error: {e}")
-        return RedirectResponse(f"{settings.FRONTEND_URL}/login?error=oauth_failed")
+        return RedirectResponse(f"{frontend_base}/login?error=oauth_failed")
 
     email = userinfo.get("email")
     if not email:
-        return RedirectResponse(f"{settings.FRONTEND_URL}/login?error=oauth_failed")
+        return RedirectResponse(f"{frontend_base}/login?error=oauth_failed")
 
     full_name = userinfo.get("name", "Google User")
 
@@ -605,7 +621,7 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_async
     access_token = create_access_token(subject=user.id, role=user.role, organization_id=str(user.organization_id))
     refresh_token = create_refresh_token(subject=user.id, organization_id=str(user.organization_id))
 
-    redirect_url = f"{settings.FRONTEND_URL}/auth/callback?access_token={access_token}&refresh_token={refresh_token}"
+    redirect_url = f"{frontend_base}/auth/callback?access_token={access_token}&refresh_token={refresh_token}"
     return RedirectResponse(redirect_url)
 
 

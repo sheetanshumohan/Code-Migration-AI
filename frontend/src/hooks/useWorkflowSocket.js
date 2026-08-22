@@ -31,7 +31,14 @@ export function useWorkflowSocket(activeWorkflowId, setActiveStepIndex, setAwait
 
     const token = localStorage.getItem('codemigration_token') || '';
     const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : '';
-    const rawApiUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL;
+    const isLocalhost = typeof window !== 'undefined' && (
+      window.location.hostname === 'localhost' || 
+      window.location.hostname === '127.0.0.1'
+    );
+    const defaultProductionBackend = 'https://code-migration-ai.onrender.com';
+    const rawApiUrl = import.meta.env.VITE_API_URL || 
+      import.meta.env.VITE_API_BASE_URL || 
+      (isLocalhost ? '' : defaultProductionBackend);
     let wsUrl;
 
     if (rawApiUrl && (rawApiUrl.startsWith('http://') || rawApiUrl.startsWith('https://'))) {

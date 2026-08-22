@@ -93,10 +93,15 @@ export default function Login() {
   }, [otpStep, otp, isForgotPassword, isRegister, fullName, orgName, isEmailValid, isPasswordValid, password]);
 
   const handleGoogleLogin = () => {
-    const backendUrl = import.meta.env.VITE_API_BASE_URL 
-      ? import.meta.env.VITE_API_BASE_URL.replace('/api/v1', '') 
-      : 'http://localhost:8000';
-    window.location.href = `${backendUrl}/api/v1/auth/google/login`;
+    const rawApiUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL;
+    let loginUrl;
+    if (rawApiUrl) {
+      const cleanBase = rawApiUrl.replace(/\/api\/v1\/?$/, '').replace(/\/+$/, '');
+      loginUrl = `${cleanBase}/api/v1/auth/google/login`;
+    } else {
+      loginUrl = `${api.defaults.baseURL || '/api/v1'}/auth/google/login`;
+    }
+    window.location.href = loginUrl;
   };
 
   const handleForgotPassword = async (e) => {

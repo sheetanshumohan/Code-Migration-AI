@@ -1,10 +1,20 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
-const rawApiUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL;
-const resolvedBaseUrl = rawApiUrl
-  ? (rawApiUrl.endsWith('/api/v1') ? rawApiUrl : `${rawApiUrl.replace(/\/+$/, '')}/api/v1`)
-  : '/api/v1';
+const isLocalhost = typeof window !== 'undefined' && (
+  window.location.hostname === 'localhost' || 
+  window.location.hostname === '127.0.0.1'
+);
+
+const defaultProductionBackend = 'https://code-migration-ai.onrender.com';
+
+const rawApiUrl = import.meta.env.VITE_API_URL || 
+  import.meta.env.VITE_API_BASE_URL || 
+  (isLocalhost ? '/api/v1' : defaultProductionBackend);
+
+const resolvedBaseUrl = rawApiUrl.endsWith('/api/v1')
+  ? rawApiUrl
+  : `${rawApiUrl.replace(/\/+$/, '')}/api/v1`;
 
 const api = axios.create({
   baseURL: resolvedBaseUrl,
