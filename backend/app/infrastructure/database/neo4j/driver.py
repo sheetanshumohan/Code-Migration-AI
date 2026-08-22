@@ -47,16 +47,18 @@ class Neo4jGraphEngine:
             self._loop = None
 
         try:
-            self._driver = AsyncGraphDatabase.driver(
+            driver = AsyncGraphDatabase.driver(
                 settings.NEO4J_URI,
                 auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD),
                 max_connection_lifetime=3600,
                 max_connection_pool_size=50,
             )
-            await self._driver.verify_connectivity()
+            await driver.verify_connectivity()
+            self._driver = driver
             await self._init_indices()
             logger.info("Connected to Neo4j Graph Engine successfully")
         except Exception as e:
+            self._driver = None
             logger.warning("Could not connect to Neo4j (will fallback or retry in live env)", error=str(e))
 
     async def close(self) -> None:

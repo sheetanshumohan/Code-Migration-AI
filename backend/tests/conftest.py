@@ -93,7 +93,10 @@ def mock_redis_engine(monkeypatch):
     async def mock_close() -> None:
         pass
 
+    from app.infrastructure.database.neo4j.driver import neo4j_engine
+    from app.infrastructure.database.qdrant.client import qdrant_engine
     from app.infrastructure.database.redis.client import redis_engine
+
     monkeypatch.setattr(redis_engine, "get_json", mock_get_json)
     monkeypatch.setattr(redis_engine, "set_json", mock_set_json)
     monkeypatch.setattr(redis_engine, "delete", mock_delete)
@@ -102,5 +105,10 @@ def mock_redis_engine(monkeypatch):
     monkeypatch.setattr(redis_engine, "connect", mock_connect)
     monkeypatch.setattr(redis_engine, "close", mock_close)
     monkeypatch.setattr(redis_engine, "_ensure_redis", AsyncMock(return_value=None))
+
+    monkeypatch.setattr(neo4j_engine, "connect", mock_connect)
+    monkeypatch.setattr(neo4j_engine, "close", mock_close)
+    monkeypatch.setattr(qdrant_engine, "connect", mock_connect)
+    monkeypatch.setattr(qdrant_engine, "close", mock_close)
 
 
