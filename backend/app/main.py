@@ -91,7 +91,10 @@ app = FastAPI(
 from starlette.middleware.sessions import SessionMiddleware
 
 # Configure CORS
-_origins = [str(o) for o in settings.BACKEND_CORS_ORIGINS] if settings.BACKEND_CORS_ORIGINS else []
+_origins = [str(o).rstrip('/') for o in settings.BACKEND_CORS_ORIGINS] if settings.BACKEND_CORS_ORIGINS else []
+if settings.FRONTEND_URL and settings.FRONTEND_URL.rstrip('/') not in _origins:
+    _origins.append(settings.FRONTEND_URL.rstrip('/'))
+
 if "*" in _origins or not _origins:
     app.add_middleware(
         CORSMiddleware,
@@ -104,6 +107,7 @@ else:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_origins,
+        allow_origin_regex=r"^https:\/\/([a-zA-Z0-9_-]+\.)?vercel\.app$",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

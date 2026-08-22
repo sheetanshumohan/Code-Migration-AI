@@ -40,19 +40,36 @@ function HealthCheckGate({ children }) {
     setIsChecking(true);
     try {
       const res = await api.get('/health', { _silent: true, timeout: 60000 });
-      // Accept 'healthy', 'degraded', or any 200 response as active backend
-      if (res.status === 200 && (res.data?.status === 'healthy' || res.data?.status === 'degraded' || res.data?.service === 'codemigration-api')) {
+      
+      // Detect if static SPA HTML was returned instead of JSON
+      const isHtmlResponse = typeof res.data === 'string' && (
+        res.data.toLowerCase().includes('<!doctype') || 
+        res.data.toLowerCase().includes('<html')
+      );
+      if (isHtmlResponse) {
+        setIsHealthy(false);
+        setErrorDetails('Received HTML instead of API JSON response. Ensure VITE_API_URL includes the https:// protocol (e.g. https://code-migration-ai.onrender.com).');
+        return false;
+      }
+
+      // Accept 'healthy', 'degraded', or any valid 200 response
+      if (res.status === 200 && (
+        res.data?.status === 'healthy' || 
+        res.data?.status === 'degraded' || 
+        res.data?.service === 'codemigration-api' ||
+        (typeof res.data === 'object' && res.data !== null && 'status' in res.data)
+      )) {
         setIsHealthy(true);
         setErrorDetails(null);
         return true;
       } else {
         setIsHealthy(false);
-        setErrorDetails(res.data?.status ? `Service status: ${res.data.status}` : 'Unknown backend status');
+        setErrorDetails(res.data?.status ? `Service status: ${res.data.status}` : 'Backend returned unexpected response format');
         return false;
       }
     } catch (err) {
       setIsHealthy(false);
-      setErrorDetails(err.message || 'Unable to establish connection to backend API');
+      setErrorDetails(err.response?.data?.detail || err.message || 'Unable to establish connection to backend API');
       return false;
     } finally {
       setIsChecking(false);

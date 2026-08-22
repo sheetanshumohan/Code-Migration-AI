@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { useWorkflowStore } from '../stores/workflowStore';
+import { getWebSocketUrl } from '../services/api';
 
 const RECONNECT_DELAY_MS  = 3000;
 const MAX_RECONNECT_TRIES = 5;
@@ -31,23 +32,7 @@ export function useWorkflowSocket(activeWorkflowId, setActiveStepIndex, setAwait
 
     const token = localStorage.getItem('codemigration_token') || '';
     const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : '';
-    const isLocalhost = typeof window !== 'undefined' && (
-      window.location.hostname === 'localhost' || 
-      window.location.hostname === '127.0.0.1'
-    );
-    const defaultProductionBackend = 'https://code-migration-ai.onrender.com';
-    const rawApiUrl = import.meta.env.VITE_API_URL || 
-      import.meta.env.VITE_API_BASE_URL || 
-      (isLocalhost ? '' : defaultProductionBackend);
-    let wsUrl;
-
-    if (rawApiUrl && (rawApiUrl.startsWith('http://') || rawApiUrl.startsWith('https://'))) {
-      const wsBase = rawApiUrl.replace(/^http/, 'ws').replace(/\/api\/v1\/?$/, '').replace(/\/+$/, '');
-      wsUrl = `${wsBase}/ws/workflows/${activeWorkflowId}${tokenQuery}`;
-    } else {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      wsUrl = `${protocol}//${window.location.host}/ws/workflows/${activeWorkflowId}${tokenQuery}`;
-    }
+    const wsUrl = getWebSocketUrl(activeWorkflowId, tokenQuery);
 
     let socket;
     try {

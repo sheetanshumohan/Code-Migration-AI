@@ -1,23 +1,93 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
-const isLocalhost = typeof window !== 'undefined' && (
-  window.location.hostname === 'localhost' || 
-  window.location.hostname === '127.0.0.1'
-);
+export const defaultProductionBackend = 'https://code-migration-ai.onrender.com';
 
-const defaultProductionBackend = 'https://code-migration-ai.onrender.com';
+/**
+ * Normalizes any backend URL string, ensuring proper protocol (https://)
+ * and stripping stray quotes or trailing slashes.
+ */
+export function normalizeBackendUrl(input) {
+  if (!input || typeof input !== 'string') return '';
+  let url = input.trim();
+  url = url.replace(/^['"]+|['"]+$/g, '').trim();
+  if (!url) return '';
 
-const rawApiUrl = import.meta.env.VITE_API_URL || 
-  import.meta.env.VITE_API_BASE_URL || 
-  (isLocalhost ? '/api/v1' : defaultProductionBackend);
+  if (url.startsWith('/')) {
+    return url.replace(/\/+$/, '');
+  }
 
-const resolvedBaseUrl = rawApiUrl.endsWith('/api/v1')
-  ? rawApiUrl
-  : `${rawApiUrl.replace(/\/+$/, '')}/api/v1`;
+  if (!/^https?:\/\//i.test(url)) {
+    if (/^(localhost|127\.0\.0\.1)(:\d+)?/i.test(url)) {
+      url = `http://${url}`;
+    } else {
+      url = `https://${url}`;
+    }
+  }
+
+  return url.replace(/\/+$/, '');
+}
+
+/**
+ * Returns the root backend domain (e.g. "https://code-migration-ai.onrender.com" or "").
+ */
+export function getBackendBaseUrl() {
+  const envUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL;
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
+    const normalized = normalizeBackendUrl(envUrl);
+    return normalized.replace(/\/api\/v1\/?$/, '').replace(/\/+$/, '');
+  }
+
+  const isLocal = typeof window !== 'undefined' && (
+    window.location.hostname === 'localhost' || 
+    window.location.hostname === '127.0.0.1'
+  );
+
+  if (isLocal) {
+    return '';
+  }
+
+  return defaultProductionBackend;
+}
+
+/**
+ * Returns the fully-qualified or relative API base URL (ending with "/api/v1").
+ */
+export function getApiBaseUrl() {
+  const root = getBackendBaseUrl();
+  if (!root || root === '') {
+    return '/api/v1';
+  }
+  return `${root}/api/v1`;
+}
+
+/**
+ * Returns the absolute or relative Google OAuth initialization URL.
+ */
+export function getGoogleLoginUrl() {
+  const root = getBackendBaseUrl();
+  if (!root || root === '') {
+    return '/api/v1/auth/google/login';
+  }
+  return `${root}/api/v1/auth/google/login`;
+}
+
+/**
+ * Resolves the WebSocket URL for live workflow events.
+ */
+export function getWebSocketUrl(activeWorkflowId, tokenQuery = '') {
+  const root = getBackendBaseUrl();
+  if (root && (root.startsWith('http://') || root.startsWith('https://'))) {
+    const wsBase = root.replace(/^http/, 'ws');
+    return `${wsBase}/ws/workflows/${activeWorkflowId}${tokenQuery}`;
+  }
+  const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const host = typeof window !== 'undefined' ? window.location.host : 'localhost:3000';
+  return `${protocol}//${host}/ws/workflows/${activeWorkflowId}${tokenQuery}`;
+}
 
 const api = axios.create({
-  baseURL: resolvedBaseUrl,
+  baseURL: getApiBaseUrl(),
   headers: {
     'Content-Type': 'application/json',
   },

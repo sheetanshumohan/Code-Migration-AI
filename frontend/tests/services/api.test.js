@@ -69,4 +69,38 @@ describe('API Service', () => {
       expect(getErrorMessage(error)).toContain('server error occurred');
     });
   });
+
+  describe('URL Normalization & Helpers', () => {
+    it('normalizes URLs without protocol by prepending https://', async () => {
+      const { normalizeBackendUrl } = await import('../../src/services/api');
+      expect(normalizeBackendUrl('code-migration-ai.onrender.com')).toBe('https://code-migration-ai.onrender.com');
+      expect(normalizeBackendUrl('api.example.com/api/v1')).toBe('https://api.example.com/api/v1');
+    });
+
+    it('handles localhost URLs with http://', async () => {
+      const { normalizeBackendUrl } = await import('../../src/services/api');
+      expect(normalizeBackendUrl('localhost:8000')).toBe('http://localhost:8000');
+      expect(normalizeBackendUrl('127.0.0.1:8000')).toBe('http://localhost:8000'.replace('localhost', '127.0.0.1'));
+    });
+
+    it('strips surrounding quotes and trailing slashes', async () => {
+      const { normalizeBackendUrl } = await import('../../src/services/api');
+      expect(normalizeBackendUrl('"https://code-migration-ai.onrender.com/"')).toBe('https://code-migration-ai.onrender.com');
+      expect(normalizeBackendUrl("'https://api.domain.com///'")).toBe('https://api.domain.com');
+    });
+
+    it('preserves relative paths starting with /', async () => {
+      const { normalizeBackendUrl } = await import('../../src/services/api');
+      expect(normalizeBackendUrl('/api/v1')).toBe('/api/v1');
+    });
+
+    it('generates correct Google Login and WebSocket URLs', async () => {
+      const { getGoogleLoginUrl, getWebSocketUrl } = await import('../../src/services/api');
+      const googleUrl = getGoogleLoginUrl();
+      expect(googleUrl).toMatch(/(\/api\/v1|https:\/\/.*)\/auth\/google\/login/);
+
+      const wsUrl = getWebSocketUrl('test-wf-123', '?token=abc');
+      expect(wsUrl).toMatch(/wss?:\/\/.*\/ws\/workflows\/test-wf-123\?token=abc/);
+    });
+  });
 });
