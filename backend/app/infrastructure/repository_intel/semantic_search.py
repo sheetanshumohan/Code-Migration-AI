@@ -35,43 +35,54 @@ def generate_deterministic_embedding(text: str, dim: int = 1536) -> list[float]:
     return [x / norm for x in vec]
 
 
+@traceable(name="SemanticSearch_IndexFileChunks", run_type="tool")
+async def index_file_chunks(repo_id: str, file_path: str, content: str) -> int:
+    """Parse file into AST chunks, generate embeddings, and upsert to Qdrant."""
+    chunks = ast_chunker.chunk_file(file_path, content)
+    if not chunks:
+        return 0
+
+    vectors = []
+    payloads = []
+
+    for chunk in chunks:
+        embedding = generate_deterministic_embedding(chunk.code_content)
+        vectors.append(embedding)
+        payloads.append({
+            "repo_id": repo_id,
+            "file_path": chunk.file_path,
+            "symbol_name": chunk.symbol_name,
+            "symbol_type": chunk.symbol_type,
+            "language": chunk.language,
+            "start_line": chunk.start_line,
+            "end_line": chunk.end_line,
+            "code_snippet": chunk.code_content[:500],
+        })
+
+    await qdrant_engine.upsert_code_embeddings(repo_id, vectors, payloads)
+    logger.info("Indexed AST code chunks into Qdrant", file=file_path, chunk_count=len(chunks))
+    return len(chunks)
+
+
+@traceable(name="SemanticSearch_SearchCode", run_type="retriever")
+async def search_code(
+    repo_id: str, query: str, limit: int = 5
+) -> list[dict[str, Any]]:
+    """Semantic search across repository source code via vector similarity."""
+    query_vector = generate_deterministic_embedding(query)
+    results = await qdrant_engine.search_similar_code(repo_id, query_vector, limit=limit)
+    return results
+
+
 class SemanticCodeSearchEngine:
-    @traceable(name="SemanticSearch_IndexFileChunks", run_type="tool")
     async def index_file_chunks(self, repo_id: str, file_path: str, content: str) -> int:
-        """Parse file into AST chunks, generate embeddings, and upsert to Qdrant."""
-        chunks = ast_chunker.chunk_file(file_path, content)
-        if not chunks:
-            return 0
+        return await index_file_chunks(repo_id, file_path, content)
 
-        vectors = []
-        payloads = []
-
-        for chunk in chunks:
-            embedding = generate_deterministic_embedding(chunk.code_content)
-            vectors.append(embedding)
-            payloads.append({
-                "repo_id": repo_id,
-                "file_path": chunk.file_path,
-                "symbol_name": chunk.symbol_name,
-                "symbol_type": chunk.symbol_type,
-                "language": chunk.language,
-                "start_line": chunk.start_line,
-                "end_line": chunk.end_line,
-                "code_snippet": chunk.code_content[:500],
-            })
-
-        await qdrant_engine.upsert_code_embeddings(repo_id, vectors, payloads)
-        logger.info("Indexed AST code chunks into Qdrant", file=file_path, chunk_count=len(chunks))
-        return len(chunks)
-
-    @traceable(name="SemanticSearch_SearchCode", run_type="retriever")
     async def search_code(
         self, repo_id: str, query: str, limit: int = 5
     ) -> list[dict[str, Any]]:
-        """Semantic search across repository source code via vector similarity."""
-        query_vector = generate_deterministic_embedding(query)
-        results = await qdrant_engine.search_similar_code(repo_id, query_vector, limit=limit)
-        return results
+        return await search_code(repo_id=repo_id, query=query, limit=limit)
 
 
 semantic_search_engine = SemanticCodeSearchEngine()
+
