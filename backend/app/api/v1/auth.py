@@ -3,6 +3,7 @@ Authentication & Authorization API Routes
 Enterprise JWT authentication, Argon2id verification, Registration, and Refresh tokens.
 """
 
+import time
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -18,6 +19,7 @@ from starlette.config import Config
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 
+from app.api.deps import RateLimiter, get_current_user
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.security import (
@@ -77,7 +79,46 @@ class VerifyOTPRequest(BaseModel):
     otp: str
 
 
-from app.api.deps import RateLimiter, get_current_user
+_memory_otp_cache: dict[str, tuple[Any, float]] = {}
+
+
+async def _store_otp(key: str, value: Any, ttl_seconds: int = 300) -> None:
+    """Store OTP in Redis if available, with in-memory TTL fallback."""
+    from app.infrastructure.database.redis.client import redis_engine
+    try:
+        await redis_engine.set_json(key, value, ttl_seconds=ttl_seconds)
+    except Exception as e:
+        logger.debug(f"Redis store_otp skipped/failed: {e}")
+    # Always keep an in-process fallback
+    _memory_otp_cache[key] = (value, time.time() + ttl_seconds)
+
+
+async def _retrieve_otp(key: str) -> Any | None:
+    """Retrieve OTP from Redis, or in-memory fallback if Redis is offline/unreachable."""
+    from app.infrastructure.database.redis.client import redis_engine
+    try:
+        val = await redis_engine.get_json(key)
+        if val is not None:
+            return val
+    except Exception as e:
+        logger.debug(f"Redis retrieve_otp skipped/failed: {e}")
+
+    if key in _memory_otp_cache:
+        val, expiry = _memory_otp_cache[key]
+        if time.time() < expiry:
+            return val
+        _memory_otp_cache.pop(key, None)
+    return None
+
+
+async def _delete_otp(key: str) -> None:
+    """Delete OTP from both Redis and in-memory cache."""
+    from app.infrastructure.database.redis.client import redis_engine
+    try:
+        await redis_engine.delete(key)
+    except Exception:
+        pass
+    _memory_otp_cache.pop(key, None)
 
 
 @router.post("/register", response_model=OTPResponse | TokenResponse, dependencies=[Depends(RateLimiter(requests=5, window=60))])
@@ -127,47 +168,6 @@ async def register_user(req: RegisterRequest, background_tasks: BackgroundTasks,
                 "organization_name": org.name,
             },
         )
-
-import time
-
-_memory_otp_cache: dict[str, tuple[Any, float]] = {}
-
-async def _store_otp(key: str, value: Any, ttl_seconds: int = 300) -> None:
-    """Store OTP in Redis if available, with in-memory TTL fallback."""
-    from app.infrastructure.database.redis.client import redis_engine
-    try:
-        await redis_engine.set_json(key, value, ttl_seconds=ttl_seconds)
-    except Exception as e:
-        logger.debug(f"Redis store_otp skipped/failed: {e}")
-    # Always keep an in-process fallback
-    _memory_otp_cache[key] = (value, time.time() + ttl_seconds)
-
-async def _retrieve_otp(key: str) -> Any | None:
-    """Retrieve OTP from Redis, or in-memory fallback if Redis is offline/unreachable."""
-    from app.infrastructure.database.redis.client import redis_engine
-    try:
-        val = await redis_engine.get_json(key)
-        if val is not None:
-            return val
-    except Exception as e:
-        logger.debug(f"Redis retrieve_otp skipped/failed: {e}")
-
-    if key in _memory_otp_cache:
-        val, expiry = _memory_otp_cache[key]
-        if time.time() < expiry:
-            return val
-        _memory_otp_cache.pop(key, None)
-    return None
-
-async def _delete_otp(key: str) -> None:
-    """Delete OTP from both Redis and in-memory cache."""
-    from app.infrastructure.database.redis.client import redis_engine
-    try:
-        await redis_engine.delete(key)
-    except Exception:
-        pass
-    _memory_otp_cache.pop(key, None)
-
 
     otp = generate_otp()
     payload = {"password": req.password, "full_name": req.full_name, "organization_name": req.organization_name}
