@@ -5,7 +5,7 @@ are correctly parsed, stored in state, and injected into the LLM system prompts.
 """
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
