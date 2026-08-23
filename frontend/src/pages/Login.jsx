@@ -102,8 +102,13 @@ export default function Login() {
     setLoading(true);
     try {
       const res = await api.post('/auth/forgot-password', { email: email.trim() });
-      toast.success(res.data.message || 'Reset link sent!');
-      setIsForgotPassword(false);
+      if (res.data.reset_token) {
+        toast.success('Ready to reset your password!');
+        navigate(`/reset-password?token=${res.data.reset_token}`);
+      } else {
+        toast.success(res.data.message || 'Reset link sent!');
+        setIsForgotPassword(false);
+      }
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to request password reset.');
     } finally {
@@ -347,7 +352,7 @@ export default function Login() {
               <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
             ) : (
               <>
-                {isForgotPassword ? 'Send Reset Link' : isRegister ? 'Create Account' : 'Sign In'}
+                {isForgotPassword ? 'Reset Password' : isRegister ? 'Create Account' : 'Sign In'}
                 <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
               </>
             )}
