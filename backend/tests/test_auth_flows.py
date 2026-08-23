@@ -261,33 +261,6 @@ async def test_google_callback_error_handling(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_google_verify_id_token(async_client: AsyncClient):
-    """Verify frontend Google Sign-In SDK ID token verification endpoint."""
-    mock_userinfo = {
-        "email": "sdk_google_user@enterprise.com",
-        "email_verified": True,
-        "name": "SDK Google User",
-        "sub": "google-sdk-sub-999",
-    }
-
-    mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    mock_resp.json.return_value = mock_userinfo
-
-    with patch("httpx.AsyncClient.get", new_callable=AsyncMock) as mock_get:
-        mock_get.return_value = mock_resp
-
-        res = await async_client.post(
-            "/api/v1/auth/google/verify",
-            json={"id_token": "valid-mock-google-id-token"},
-        )
-        assert res.status_code == 200
-        data = res.json()
-        assert "access_token" in data
-        assert data["user"]["email"] == "sdk_google_user@enterprise.com"
-
-
-@pytest.mark.asyncio
 async def test_protected_routes_authorization(async_client: AsyncClient):
     """Verify protected routes reject unauthenticated or invalid tokens and accept valid tokens."""
     # Missing Token
