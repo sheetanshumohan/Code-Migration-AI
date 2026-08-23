@@ -83,7 +83,8 @@ async def register_user(req: RegisterRequest, background_tasks: BackgroundTasks,
             detail="A user with this email already exists.",
         )
 
-    org_slug = req.organization_name.lower().replace(" ", "-")[:50]
+    base_slug = req.organization_name.lower().replace(" ", "-")[:40]
+    org_slug = f"{base_slug}-{uuid.uuid4().hex[:8]}"
     org = Organization(name=req.organization_name, slug=org_slug)
     db.add(org)
     await db.flush()
