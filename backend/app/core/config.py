@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     )
 
     # General
-    ENVIRONMENT: str = "development"
+    ENVIRONMENT: str = "production"
     DEBUG: bool = True
     PROJECT_NAME: str = "Code Migration AI"
     APP_VERSION: str = "1.0.0"
@@ -75,6 +75,7 @@ class Settings(BaseSettings):
         "http://localhost:5173",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
+        "https://code-migration-ai.vercel.app"
     ]
 
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
@@ -97,6 +98,7 @@ class Settings(BaseSettings):
             "http://localhost:5173",
             "http://127.0.0.1:3000",
             "http://127.0.0.1:5173",
+            "https://code-migration-ai.vercel.app"
         ]
 
     # Primary Database (PostgreSQL)
