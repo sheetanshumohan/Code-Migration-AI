@@ -68,10 +68,8 @@ export function getApiBaseUrl() {
  * Returns the absolute or relative Google OAuth initialization URL.
  */
 export function getGoogleLoginUrl() {
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return `${getApiBaseUrl()}/auth/google/login`;
-  }
-  return `${defaultProductionBackend}/api/v1/auth/google/login`;
+  const root = getBackendBaseUrl();
+  return `${root}/api/v1/auth/google/login`;
 }
 
 /**
@@ -131,7 +129,7 @@ export function getErrorMessage(error) {
   }
 
   const status = error.response?.status;
-  const data   = error.response?.data;
+  const data = error.response?.data;
 
   // Backend may return `detail` (FastAPI default), `message`, or a string body.
   const backendDetail =
@@ -235,7 +233,7 @@ api.interceptors.response.use(
         localStorage.setItem('codemigration_token', data.access_token);
         localStorage.setItem('codemigration_refresh_token', data.refresh_token);
         api.defaults.headers.common.Authorization = `Bearer ${data.access_token}`;
-        originalRequest.headers.Authorization    = `Bearer ${data.access_token}`;
+        originalRequest.headers.Authorization = `Bearer ${data.access_token}`;
         processQueue(null, data.access_token);
         // Retry the original request — don't show a toast for this case
         return api(originalRequest);

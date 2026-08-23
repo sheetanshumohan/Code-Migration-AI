@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Code Migration AI"
     APP_VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
-    SECRET_KEY: str = "super-secret-key-change-in-production-min-32-chars-hex-entropy"
+    SECRET_KEY: str = "47c3a54093a65bac4149f7004b51d7c9a7ba48d99de4393fac997aef51eb2066"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 # 24 hours
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
