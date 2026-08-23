@@ -64,13 +64,6 @@ export function getApiBaseUrl() {
   return `${root}/api/v1`;
 }
 
-/**
- * Returns the absolute or relative Google OAuth initialization URL.
- */
-export function getGoogleLoginUrl() {
-  const root = getBackendBaseUrl();
-  return `${root}/api/v1/auth/google/login`;
-}
 
 /**
  * Resolves the WebSocket URL for live workflow events.
