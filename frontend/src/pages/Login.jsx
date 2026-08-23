@@ -18,18 +18,6 @@ export default function Login() {
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [emailTouched, setEmailTouched] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  
-  const [otpStep, setOtpStep] = useState(false);
-  const [otp, setOtp] = useState('');
-  const [resendCooldown, setResendCooldown] = useState(0);
-
-  useEffect(() => {
-    if (resendCooldown <= 0) return;
-    const timer = setInterval(() => {
-      setResendCooldown((prev) => prev - 1);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [resendCooldown]);
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -50,9 +38,6 @@ export default function Login() {
     setOrgName('');
     setEmailTouched(false);
     setShowPassword(false);
-    setOtpStep(false);
-    setOtp('');
-    setResendCooldown(0);
   };
 
   // Validation helpers
@@ -84,9 +69,6 @@ export default function Login() {
   }, [isRegister, password, passwordValidation]);
 
   const isFormValid = useMemo(() => {
-    if (otpStep) {
-      return otp.trim().length === 6;
-    }
     if (isForgotPassword) {
       return isEmailValid;
     }
@@ -100,7 +82,7 @@ export default function Login() {
     }
     // Standard login
     return isEmailValid && password.trim().length > 0;
-  }, [otpStep, otp, isForgotPassword, isRegister, fullName, orgName, isEmailValid, isPasswordValid, password]);
+  }, [isForgotPassword, isRegister, fullName, orgName, isEmailValid, isPasswordValid, password]);
 
   const handleGoogleLogin = () => {
     try {
@@ -129,9 +111,13 @@ export default function Login() {
     }
   };
 
-  const handleResendOtp = async () => {
-    if (resendCooldown > 0 || loading) return;
+
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!isFormValid) return;
     setLoading(true);
+
     try {
       if (isRegister) {
         const res = await api.post('/auth/register', {
@@ -140,55 +126,14 @@ export default function Login() {
           full_name: fullName.trim(),
           organization_name: orgName.trim(),
         });
-        toast.success(res.data.message || 'New OTP sent to your email.');
-      } else {
-        const res = await api.post('/auth/login', { email: email.trim(), password });
-        toast.success(res.data.message || 'New OTP sent to your email.');
-      }
-      setResendCooldown(30);
-      setOtp('');
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to resend OTP.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!isFormValid) return;
-    setLoading(true);
-
-    try {
-      if (otpStep) {
-        // Submit OTP
-        const endpoint = isRegister ? '/auth/verify-register-otp' : '/auth/verify-login-otp';
-        const res = await api.post(endpoint, { email: email.trim(), otp: otp.trim() });
         setAuth(res.data.user, res.data.access_token, res.data.refresh_token);
-        toast.success(isRegister ? 'Organization registered successfully!' : `Welcome back, ${res.data.user.full_name}.`);
+        toast.success(res.data.message || 'Organization registered successfully!');
         navigate('/');
       } else {
-        // Step 1: Request OTP
-        if (isRegister) {
-          const res = await api.post('/auth/register', {
-            email: email.trim(),
-            password,
-            full_name: fullName.trim(),
-            organization_name: orgName.trim(),
-          });
-          if (res.data.requires_otp) {
-            setOtpStep(true);
-            setResendCooldown(30);
-            toast.success(res.data.message);
-          }
-        } else {
-          const res = await api.post('/auth/login', { email: email.trim(), password });
-          if (res.data.requires_otp) {
-            setOtpStep(true);
-            setResendCooldown(30);
-            toast.success(res.data.message);
-          }
-        }
+        const res = await api.post('/auth/login', { email: email.trim(), password });
+        setAuth(res.data.user, res.data.access_token, res.data.refresh_token);
+        toast.success(`Welcome back, ${res.data.user.full_name}.`);
+        navigate('/');
       }
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Authentication failed.');
@@ -216,58 +161,7 @@ export default function Login() {
         </div>
 
         <form onSubmit={isForgotPassword ? handleForgotPassword : handleSubmit} className="space-y-4">
-          {otpStep ? (
-            <div className="space-y-3">
-              <div className="text-center pb-1">
-                <p className="text-xs text-gray-400">
-                  Enter the 6-digit verification code sent to
-                </p>
-                <p className="text-xs font-semibold text-indigo-400 mt-0.5 break-all">
-                  {email.trim()}
-                </p>
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-gray-300 uppercase tracking-wider mb-1">
-                  Enter 6-Digit OTP
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-indigo-400/70" />
-                  </div>
-                  <input
-                    type="text"
-                    required
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    className="block w-full pl-10 pr-3 py-3 rounded-xl border border-indigo-500/20 bg-[#0B0F19]/50 text-white placeholder-gray-500 text-center tracking-[0.25em] font-mono text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 sm:text-sm transition-all"
-                    placeholder="123456"
-                    maxLength={6}
-                    autoFocus
-                  />
-                </div>
-              </div>
-              <div className="flex items-center justify-between text-xs pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOtpStep(false);
-                    setOtp('');
-                  }}
-                  className="text-gray-400 hover:text-white transition-colors cursor-pointer"
-                >
-                  &larr; Change Email
-                </button>
-                <button
-                  type="button"
-                  disabled={resendCooldown > 0 || loading}
-                  onClick={handleResendOtp}
-                  className="text-indigo-400 hover:text-indigo-300 disabled:text-gray-500 transition-colors cursor-pointer disabled:cursor-not-allowed font-medium"
-                >
-                  {resendCooldown > 0 ? `Resend Code (${resendCooldown}s)` : 'Resend Code'}
-                </button>
-              </div>
-            </div>
-          ) : !otpStep && !isForgotPassword && isRegister && (
+          {!isForgotPassword && isRegister && (
             <>
               <div>
                 <label htmlFor="fullName" className="block text-[11px] font-semibold text-gray-300 uppercase tracking-wider mb-1">
@@ -300,8 +194,7 @@ export default function Login() {
             </>
           )}
 
-          {!otpStep && (
-            <div>
+          <div>
               <div className="flex justify-between items-center mb-1">
                 <label htmlFor="email" className="block text-[11px] font-semibold text-gray-300 uppercase tracking-wider">
                   Email Address <span className="text-rose-400">*</span>
@@ -346,9 +239,8 @@ export default function Login() {
                 )}
               </div>
             </div>
-          )}
 
-          {!otpStep && !isForgotPassword && (
+          {!isForgotPassword && (
             <div>
               <div className="flex justify-between items-center mb-1">
                 <label htmlFor="password" className="block text-[11px] font-semibold text-gray-300 uppercase tracking-wider">
@@ -455,14 +347,14 @@ export default function Login() {
               <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
             ) : (
               <>
-                {otpStep ? 'Verify OTP' : isForgotPassword ? 'Send Reset Link' : isRegister ? 'Create Account' : 'Sign In'}
+                {isForgotPassword ? 'Send Reset Link' : isRegister ? 'Create Account' : 'Sign In'}
                 <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
               </>
             )}
           </button>
         </form>
 
-        {!isForgotPassword && !otpStep && (
+        {!isForgotPassword && (
           <>
             <div className="my-6 flex items-center gap-3">
               <div className="h-px bg-gray-800 flex-1"></div>
@@ -487,7 +379,6 @@ export default function Login() {
         )}
 
         <div className="mt-8 pt-4 border-t border-gray-800/60 flex flex-col items-center gap-3">
-          {!otpStep && (
             <button
               type="button"
               onClick={() => switchAuthMode(!isRegister)}
@@ -495,7 +386,6 @@ export default function Login() {
             >
               {isRegister ? 'Already have an account? Sign In' : "Don't have an account? Register"}
             </button>
-          )}
           {!isRegister && !isForgotPassword && (
             <button
               type="button"

@@ -111,7 +111,7 @@ def mock_redis_engine(monkeypatch):
     from app.infrastructure.database.redis.client import redis_engine
     stripe.api_key = "sk_test_mock_stripe_key_for_testing"
     monkeypatch.setattr(settings, "STRIPE_SECRET_KEY", "sk_test_mock_stripe_key_for_testing")
-    monkeypatch.setattr(settings, "DISABLE_AUTH_OTP", True)
+
 
     monkeypatch.setattr(redis_engine, "get_json", mock_get_json)
     monkeypatch.setattr(redis_engine, "set_json", mock_set_json)

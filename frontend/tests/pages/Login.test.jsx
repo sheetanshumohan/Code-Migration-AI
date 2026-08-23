@@ -72,8 +72,10 @@ describe('Login Page', () => {
     expect(screen.getByText(/organization name/i)).toBeInTheDocument();
   });
 
-  it('submits login and shows OTP step on success', async () => {
-    api.post.mockResolvedValueOnce({ data: { requires_otp: true, message: 'OTP sent' } });
+  it('submits login and navigates on success', async () => {
+    api.post.mockResolvedValueOnce({ 
+      data: { user: { full_name: 'Test' }, access_token: 'token', refresh_token: 'refresh' } 
+    });
     
     renderLogin();
     
@@ -90,43 +92,6 @@ describe('Login Page', () => {
       expect(api.post).toHaveBeenCalledWith('/auth/login', {
         email: 'test@example.com',
         password: 'password123',
-      });
-    });
-
-    // Verify OTP step appears
-    await waitFor(() => {
-      expect(screen.getByText(/enter 6-digit otp/i)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /verify otp/i })).toBeInTheDocument();
-    });
-  });
-
-  it('submits OTP and navigates on success', async () => {
-    // Setup to be already in OTP step for a login
-    // Since state is internal, we simulate the first step
-    api.post.mockResolvedValueOnce({ data: { requires_otp: true, message: 'OTP sent' } });
-    renderLogin();
-    
-    fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: 'test@example.com' } });
-    fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'password123' } });
-    fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/enter 6-digit otp/i)).toBeInTheDocument();
-    });
-
-    // Now submit OTP
-    api.post.mockResolvedValueOnce({ 
-      data: { user: { full_name: 'Test' }, access_token: 'token', refresh_token: 'refresh' } 
-    });
-
-    const otpInput = screen.getByPlaceholderText('123456');
-    fireEvent.change(otpInput, { target: { value: '111111' } });
-    fireEvent.click(screen.getByRole('button', { name: /verify otp/i }));
-
-    await waitFor(() => {
-      expect(api.post).toHaveBeenCalledWith('/auth/verify-login-otp', {
-        email: 'test@example.com',
-        otp: '111111',
       });
       expect(mockSetAuth).toHaveBeenCalledWith({ full_name: 'Test' }, 'token', 'refresh');
       expect(mockNavigate).toHaveBeenCalledWith('/');

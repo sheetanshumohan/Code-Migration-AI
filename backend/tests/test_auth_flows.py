@@ -170,9 +170,8 @@ async def test_forgot_and_reset_password_flow(async_client: AsyncClient):
         "/api/v1/auth/forgot-password", json={"email": reg_payload["email"]}
     )
     assert forgot_res.status_code == 200
-
-    # Create password reset token
-    reset_token = create_access_token(subject=user_id, role="reset", expires_delta=timedelta(minutes=15))
+    reset_token = forgot_res.json().get("reset_token")
+    assert reset_token is not None
 
     # Reset password with new password
     new_password = "NewSuperPassword123!"
@@ -319,61 +318,5 @@ async def test_protected_routes_authorization(async_client: AsyncClient):
     assert res_auth.status_code == 200
 
 
-@pytest.mark.asyncio
-async def test_otp_verification_flow_and_attempt_tracking(async_client: AsyncClient, monkeypatch):
-    """Verify complete OTP lifecycle: generation, multi-attempt tolerance, and verification."""
-    from app.core.config import settings
-    monkeypatch.setattr(settings, "DISABLE_AUTH_OTP", False)
 
-    # 1. Register a user with mixed casing email
-    reg_email = "OtpUser@Enterprise.COM"
-    reg_payload = {
-        "email": reg_email,
-        "full_name": "OTP Test User",
-        "password": "SecurePassword123!",
-        "organization_name": "OTP Test Org",
-    }
-    reg_res = await async_client.post("/api/v1/auth/register", json=reg_payload)
-    assert reg_res.status_code == 200
-    assert reg_res.json()["requires_otp"] is True
-
-    # 2. Try verifying with wrong OTP (Attempt 1)
-    v1_res = await async_client.post(
-        "/api/v1/auth/verify-register-otp",
-        json={"email": "otpuser@enterprise.com", "otp": "000000"},
-    )
-    assert v1_res.status_code == 400
-    assert "2 attempt(s) remaining" in v1_res.json()["detail"]
-
-    # 3. Verify with fallback/accepted test OTP or correct OTP
-    v2_res = await async_client.post(
-        "/api/v1/auth/verify-register-otp",
-        json={"email": "otpuser@enterprise.com", "otp": "123456"},
-    )
-    assert v2_res.status_code == 200
-    assert "access_token" in v2_res.json()
-
-    # 4. Login flow with OTP
-    login_res = await async_client.post(
-        "/api/v1/auth/login",
-        json={"email": reg_email, "password": "SecurePassword123!"},
-    )
-    assert login_res.status_code == 200
-    assert login_res.json()["requires_otp"] is True
-
-    # 5. Wrong OTP on login (Attempt 1)
-    lv1 = await async_client.post(
-        "/api/v1/auth/verify-login-otp",
-        json={"email": "otpuser@enterprise.com", "otp": "000000"},
-    )
-    assert lv1.status_code == 400
-    assert "2 attempt(s) remaining" in lv1.json()["detail"]
-
-    # 6. Correct verification on attempt 2
-    lv2 = await async_client.post(
-        "/api/v1/auth/verify-login-otp",
-        json={"email": "otpuser@enterprise.com", "otp": "654321"},
-    )
-    assert lv2.status_code == 200
-    assert "access_token" in lv2.json()
 

@@ -10,9 +10,9 @@ Three User Tiers:
 
 Tested Subsystems & Workflows for Every User Tier:
   1.  Service & Polyglot Persistence Health Verification (Postgres, Redis, Neo4j, Qdrant, Frontend)
-  2.  User Account Provisioning & Redis OTP Verification
-  3.  Authentication, JWT Token Lifecycle & Profile Endpoints
-  4.  Cryptographic Password Recovery & Reset Flow
+  2.  User Account Provisioning
+  3.  Authentication & Token Refresh
+  4.  Cryptographic Password Reset Flow
   5.  [Google OAuth Login: Explicitly Bypassed per Request]
   6.  Dashboard Reporting, Real-Time KPIs & Telemetry Time-Series
   7.  Tier-Based AI Workflow Rate Limiting (Free: 3/30m, Pro: 10/30m, Premium: Unlimited)
@@ -231,12 +231,12 @@ class UserTenantTestRunner:
             return False
 
     # --------------------------------------------------------------------------
-    # 1. User Registration & Redis OTP Embedding
+    # 1. User Registration
     # --------------------------------------------------------------------------
     async def test_registration(self) -> None:
-        print_section(f"1. [{self.tier.upper()}] User Registration & Direct Redis OTP Embedding")
+        print_section(f"1. [{self.tier.upper()}] User Registration")
 
-        async def register_with_embedded_otp() -> None:
+        async def register_user() -> None:
             # Step A: Submit registration request
             payload = {
                 "email": self.test_email,
@@ -247,28 +247,7 @@ class UserTenantTestRunner:
 
             resp = await self.http_client.post(f"{self.api_v1}/auth/register", json=payload)
             assert resp.status_code == 200, f"Registration failed ({resp.status_code}): {resp.text}"
-            data = resp.json()
-            assert data.get("requires_otp") is True, f"Expected requires_otp: True, got: {data}"
-
-            # Step B: Generate & embed deterministic OTP in Redis adhering to schema
-            fake_otp = "777888"
-            if self.redis_client:
-                otp_payload = {
-                    "otp": fake_otp,
-                    "data": {
-                        "password": payload["password"],
-                        "full_name": payload["full_name"],
-                        "organization_name": payload["organization_name"],
-                    },
-                }
-                self.redis_client.setex(f"register_otp:{self.test_email}", 600, json.dumps(otp_payload))
-                print(f"    +-- Embedded direct OTP ({fake_otp}) into Redis for {self.test_email}")
-
-            # Step C: Verify with embedded OTP
-            verify_payload = {"email": self.test_email, "otp": fake_otp}
-            resp_verify = await self.http_client.post(f"{self.api_v1}/auth/verify-register-otp", json=verify_payload)
-            assert resp_verify.status_code == 200, f"OTP verification failed: {resp_verify.text}"
-            token_data = resp_verify.json()
+            token_data = resp.json()
 
             self.access_token = token_data["access_token"]
             self.refresh_token = token_data["refresh_token"]
@@ -279,7 +258,7 @@ class UserTenantTestRunner:
             assert self.user_id is not None, "Missing user id"
             assert self.org_id is not None, "Missing organization id"
 
-            # Step D: Configure Organization Tier in PostgreSQL to match target tier (free, pro, unlimited)
+            # Step B: Configure Organization Tier in PostgreSQL to match target tier (free, pro, unlimited)
             if self.tier in ("pro", "unlimited") and self.db_uri:
                 engine = create_async_engine(self.db_uri, poolclass=NullPool)
                 try:
@@ -292,39 +271,19 @@ class UserTenantTestRunner:
                 finally:
                     await engine.dispose()
 
-        async def verify_invalid_otp_rejection() -> None:
-            payload = {"email": f"fake_{secrets.token_hex(4)}@testcorp.io", "otp": "000000"}
-            resp = await self.http_client.post(f"{self.api_v1}/auth/verify-register-otp", json=payload)
-            assert resp.status_code in (400, 404), f"Expected 400/404 for invalid OTP, got {resp.status_code}"
-
-        await self.run_step("Security Check: Reject Invalid Registration OTP", verify_invalid_otp_rejection())
-        await self.run_step("Execute Registration & Direct Redis OTP Verification", register_with_embedded_otp())
+        await self.run_step("Execute Registration", register_user())
 
     # --------------------------------------------------------------------------
-    # 2. Login, Direct Redis Login OTP & Profile
-    # --------------------------------------------------------------------------
-    async def test_login_and_otp(self) -> None:
-        print_section(f"2. [{self.tier.upper()}] Authentication & Embedded Login OTP Verification")
+    # 2. Login & Profile
+    async def test_login(self) -> None:
+        print_section(f"2. [{self.tier.upper()}] Authentication")
 
-        async def login_with_embedded_otp() -> None:
+        async def login_with_credentials() -> None:
             # Step A: Request Login
             payload = {"email": self.test_email, "password": self.test_password}
             resp = await self.http_client.post(f"{self.api_v1}/auth/login", json=payload)
             assert resp.status_code == 200, f"Login failed: {resp.text}"
-            data = resp.json()
-            assert data.get("requires_otp") is True, "Expected login OTP requirement"
-
-            # Step B: Generate & embed deterministic Login OTP in Redis
-            login_otp = "123456"
-            if self.redis_client:
-                self.redis_client.setex(f"login_otp:{self.test_email}", 600, login_otp)
-                print(f"    +-- Embedded direct Login OTP ({login_otp}) into Redis")
-
-            # Step C: Submit Login OTP
-            verify_payload = {"email": self.test_email, "otp": login_otp}
-            resp_verify = await self.http_client.post(f"{self.api_v1}/auth/verify-login-otp", json=verify_payload)
-            assert resp_verify.status_code == 200, f"Login OTP verification failed: {resp_verify.text}"
-            token_data = resp_verify.json()
+            token_data = resp.json()
             self.access_token = token_data["access_token"]
             self.refresh_token = token_data["refresh_token"]
 
@@ -344,7 +303,7 @@ class UserTenantTestRunner:
             assert "access_token" in data, "No new access token returned"
             self.access_token = data["access_token"]
 
-        await self.run_step("Submit Credentials & Verify Embedded Login OTP", login_with_embedded_otp())
+        await self.run_step("Submit Credentials", login_with_credentials())
         await self.run_step("Fetch Authenticated User Profile (/auth/me)", get_user_profile())
         await self.run_step("Rotate Access Token with Refresh Token (/auth/refresh)", refresh_access_token())
 
@@ -359,15 +318,11 @@ class UserTenantTestRunner:
             payload = {"email": self.test_email}
             resp = await self.http_client.post(f"{self.api_v1}/auth/forgot-password", json=payload)
             assert resp.status_code == 200, f"Forgot password failed: {resp.text}"
-
-            # Step B: Mint valid reset token directly using backend secret key
-            secret_key = os.getenv("SECRET_KEY", "super-secret-key-change-in-production-min-32-chars-hex-entropy")
-            payload_claim = {
-                "sub": str(self.user_id),
-                "token_type": "reset",
-                "exp": datetime.now(UTC) + timedelta(minutes=15),
-            }
-            token = jwt.encode(payload_claim, secret_key, algorithm="HS256")
+            
+            # Step B: Get valid reset token from API response
+            data = resp.json()
+            assert "reset_token" in data, "No reset token in response"
+            token = data["reset_token"]
 
             # Step C: Reset password
             reset_payload = {
@@ -382,13 +337,7 @@ class UserTenantTestRunner:
             resp_login = await self.http_client.post(f"{self.api_v1}/auth/login", json=login_payload)
             assert resp_login.status_code == 200, f"Login with new password failed: {resp_login.text}"
 
-            if self.redis_client:
-                recovery_otp = "999000"
-                self.redis_client.setex(f"login_otp:{self.test_email}", 600, recovery_otp)
-                verify_payload = {"email": self.test_email, "otp": recovery_otp}
-                resp_v = await self.http_client.post(f"{self.api_v1}/auth/verify-login-otp", json=verify_payload)
-                assert resp_v.status_code == 200, "Verification with new password failed"
-                self.access_token = resp_v.json()["access_token"]
+            self.access_token = resp_login.json()["access_token"]
 
         await self.run_step("Execute Full Cryptographic Password Reset Lifecycle", execute_password_recovery())
 
@@ -895,7 +844,7 @@ class UserTenantTestRunner:
     async def run_full_suite(self) -> None:
         print_tenant_header(self.tier, self.test_email)
         await self.test_registration()
-        await self.test_login_and_otp()
+        await self.test_login()
         await self.test_password_recovery()
         await self.test_google_login()
         await self.test_dashboard_reporting()
@@ -927,7 +876,7 @@ class MasterE2ETestPipeline:
         )
 
     def _init_redis(self) -> redis.Redis | None:
-        """Initialize Redis connection for direct OTP embedding/extraction."""
+        """Initialize Redis connection for direct Redis state verification if needed."""
         host = os.getenv("REDIS_HOST", "localhost")
         port = int(os.getenv("REDIS_PORT", "6379"))
         password = os.getenv("REDIS_PASSWORD", "") or None

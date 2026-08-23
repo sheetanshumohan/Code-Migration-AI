@@ -28,17 +28,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 # 24 hours
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     FRONTEND_URL: str = "https://code-migration-ai.vercel.app"
-    DISABLE_AUTH_OTP: bool = False
 
-    # Email Delivery (Resend API preferred; SMTP fallback)
-    RESEND_API_KEY: str | None = None
-    RESEND_FROM_EMAIL: str = "onboarding@resend.dev"
-    SMTP_HOST: str | None = None
-    SMTP_PORT: int = 587
-    SMTP_USER: str | None = None
-    SMTP_PASSWORD: str | None = None
-    SMTP_FROM_EMAIL: str = "noreply@codemigration.ai"
-    SMTP_USE_TLS: bool = True
 
     @model_validator(mode="before")
     @classmethod
