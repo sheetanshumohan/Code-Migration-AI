@@ -123,6 +123,8 @@ app.add_middleware(
     secret_key=settings.SECRET_KEY,
     session_cookie="codemigration_session",
     max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    same_site="none" if settings.ENVIRONMENT == "production" else "lax",
+    https_only=True if settings.ENVIRONMENT == "production" else False,
 )
 
 # Initialize Observability (Prometheus, OTel, Sentry)
