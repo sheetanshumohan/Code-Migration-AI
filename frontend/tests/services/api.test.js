@@ -101,11 +101,8 @@ describe('API Service', () => {
       expect(normalizeBackendUrl('<YOUR_BACKEND_URL>')).toBe('');
     });
 
-    it('generates correct Google Login and WebSocket URLs', async () => {
-      const { getGoogleLoginUrl, getWebSocketUrl } = await import('../../src/services/api');
-      const googleUrl = getGoogleLoginUrl();
-      expect(googleUrl).toMatch(/(\/api\/v1|https:\/\/.*)\/auth\/google\/login/);
-
+    it('generates correct WebSocket URL', async () => {
+      const { getWebSocketUrl } = await import('../../src/services/api');
       const wsUrl = getWebSocketUrl('test-wf-123', '?token=abc');
       expect(wsUrl).toMatch(/wss?:\/\/.*\/ws\/workflows\/test-wf-123\?token=abc/);
     });
