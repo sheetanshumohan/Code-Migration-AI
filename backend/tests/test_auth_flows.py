@@ -5,7 +5,7 @@ forgot/reset password, Argon2id hashing, Google OAuth redirect, callback, token 
 """
 
 from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import AsyncClient
