@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Sparkles, Shield, ArrowRight, Lock, Mail, Building, Check, X, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
-import api, { defaultProductionBackend } from '../services/api';
+import api, { getBackendBaseUrl, defaultProductionBackend } from '../services/api';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -85,9 +85,8 @@ export default function Login() {
   }, [isForgotPassword, isRegister, fullName, orgName, isEmailValid, isPasswordValid, password]);
 
   const handleGoogleLogin = () => {
-    window.location.assign(
-      `${import.meta.env.VITE_API_URL}/api/v1/auth/google/login`
-    );
+    const baseUrl = getBackendBaseUrl();
+    window.location.assign(`${baseUrl}/api/v1/auth/google/login`);
   };
 
   const handleForgotPassword = async (e) => {
