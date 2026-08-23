@@ -68,8 +68,10 @@ export function getApiBaseUrl() {
  * Returns the absolute or relative Google OAuth initialization URL.
  */
 export function getGoogleLoginUrl() {
-  const root = getBackendBaseUrl();
-  return `${root}/api/v1/auth/google/login`;
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return `${getApiBaseUrl()}/auth/google/login`;
+  }
+  return `${defaultProductionBackend}/api/v1/auth/google/login`;
 }
 
 /**
