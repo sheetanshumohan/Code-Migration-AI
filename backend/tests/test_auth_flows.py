@@ -162,8 +162,8 @@ async def test_forgot_and_reset_password_flow(async_client: AsyncClient):
         "password": "OldPassword123!",
         "organization_name": "Reset Org",
     }
-    reg_res = await async_client.post("/api/v1/auth/register", json=reg_payload)
-    user_id = reg_res.json()["user"]["id"]
+    await async_client.post("/api/v1/auth/register", json=reg_payload)
+
 
     # Request password reset
     forgot_res = await async_client.post(
