@@ -358,3 +358,91 @@ async def google_callback(request: Request, db: AsyncSession = Depends(get_async
 
     redirect_url = f"{frontend_base}/auth/callback?access_token={access_token}&refresh_token={refresh_token}"
     return RedirectResponse(redirect_url)
+
+
+class GoogleTokenRequest(BaseModel):
+    id_token: str
+
+
+@router.post("/google/token", response_model=TokenResponse)
+async def google_token_login(req: GoogleTokenRequest, db: AsyncSession = Depends(get_async_db)) -> Any:
+    """Authenticate or register user using a Google ID Token (from Google Identity Services)."""
+    import httpx
+    if not req.id_token:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ID token is required.")
+
+    # Verify ID token against Google's public tokeninfo API endpoint
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            resp = await client.get(f"https://oauth2.googleapis.com/tokeninfo?id_token={req.id_token}")
+            if resp.status_code != 200:
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired Google token.")
+            userinfo = resp.json()
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Google token verification error: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to verify token with Google.")
+
+    email = userinfo.get("email")
+    if not email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google account has no associated email.")
+
+    email_clean = email.lower().strip()
+    full_name = userinfo.get("name") or email_clean.split("@")[0].capitalize()
+
+    stmt = select(User).where(User.email.ilike(email_clean))
+    res = await db.execute(stmt)
+    user = res.scalar_one_or_none()
+
+    if not user:
+        base_slug = f"{full_name.lower().replace(' ', '-')[:30]}-org"
+        org_slug = f"{base_slug}-{uuid.uuid4().hex[:8]}"
+        org = Organization(name=f"{full_name}'s Org", slug=org_slug)
+        db.add(org)
+        await db.flush()
+
+        user = User(
+            organization_id=org.id,
+            email=email_clean,
+            full_name=full_name,
+            oauth_provider="google",
+            oauth_id=userinfo.get("sub"),
+            role="admin",
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+    access_token = create_access_token(subject=user.id, role=user.role, organization_id=str(user.organization_id))
+    refresh_token = create_refresh_token(subject=user.id, organization_id=str(user.organization_id))
+
+    org_stmt = select(Organization).where(Organization.id == user.organization_id)
+    org_res = await db.execute(org_stmt)
+    org = org_res.scalar_one_or_none()
+
+    from app.core.audit import record_audit_log
+    await record_audit_log(
+        db=db,
+        organization_id=user.organization_id,
+        user_id=user.id,
+        action="login",
+        resource_type="auth_session",
+        resource_id=str(user.id),
+        metadata={"email": user.email, "method": "google_id_token"},
+    )
+
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        user={
+            "id": str(user.id),
+            "email": user.email,
+            "full_name": user.full_name,
+            "role": user.role,
+            "organization_id": str(user.organization_id),
+            "organization_name": org.name if org else None,
+            "plan_tier": org.plan_tier if org else "free",
+        },
+    )
+
