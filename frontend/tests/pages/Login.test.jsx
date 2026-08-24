@@ -34,6 +34,17 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
+vi.mock('@react-oauth/google', () => ({
+  GoogleOAuthProvider: ({ children }) => <div>{children}</div>,
+  GoogleLogin: ({ onSuccess }) => (
+    <button
+      onClick={() => onSuccess && onSuccess({ credential: 'mock-google-id-token' })}
+    >
+      Continue with Google
+    </button>
+  ),
+}));
+
 describe('Login Page', () => {
   let mockSetAuth;
 
