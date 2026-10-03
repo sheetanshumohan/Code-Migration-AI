@@ -5,15 +5,16 @@ Orchestrates asynchronous migration execution, background AST indexing, and sand
 
 import asyncio
 import sys
+
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+import time
 import typing
 import uuid
 from datetime import UTC, datetime
 
 from celery import Celery
 
-import time
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.telemetry import (
