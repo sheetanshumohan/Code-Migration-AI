@@ -149,7 +149,7 @@ class HermeticDockerRunner:
             def _run_subprocess_sync() -> subprocess.CompletedProcess[bytes]:
                 return subprocess.run(
                     shell_cmd,
-                    shell=True,
+                    shell=True,  # nosec B602
                     cwd=workspace_dir,
                     capture_output=True,
                     timeout=timeout_seconds,
