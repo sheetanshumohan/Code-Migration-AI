@@ -180,12 +180,12 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str | None = None
     PERPLEXITY_API_KEY: str | None = None
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    DEFAULT_LLM_PROVIDER: str = "openai" # "openai", "anthropic", "gemini", "ollama", "groq", "perplexity"
-    DEFAULT_FRONTIER_MODEL: str = "gpt-4o"
-    DEFAULT_FAST_MODEL: str = "gpt-4o-mini"
+    DEFAULT_LLM_PROVIDER: str = "groq" # "openai", "anthropic", "gemini", "ollama", "groq", "perplexity"
+    DEFAULT_FRONTIER_MODEL: str = "openai/gpt-oss-120b"
+    DEFAULT_FAST_MODEL: str = "openai/gpt-oss-20b"
     ANTHROPIC_DEFAULT_MODEL: str = "claude-3-5-sonnet-20240620"
     GEMINI_DEFAULT_MODEL: str = "gemini-2.5-flash"
-    GROQ_DEFAULT_MODEL: str = "qwen/qwen3.6-27b"
+    GROQ_DEFAULT_MODEL: str = "openai/gpt-oss-120b"
 
     # Version Control
     GITHUB_TOKEN: str | None = None

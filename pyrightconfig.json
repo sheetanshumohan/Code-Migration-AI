@@ -1,0 +1,10 @@
+{
+  "include": [
+    "backend",
+    "benchmark",
+    "e2e_test_pipeline.py"
+  ],
+  "extraPaths": [
+    "./backend"
+  ]
+}

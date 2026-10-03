@@ -190,6 +190,10 @@ RULES:
                     lines = lines[:-1]
                 transformed_code = "\n".join(lines).strip()
 
+            if not transformed_code.strip():
+                logger.warning(f"Refactor LLM returned empty code for {rel_file}. Retaining original content.")
+                transformed_code = original_code
+
             t_tokens = getattr(response, "total_tokens", 0)
             t_cost = getattr(response, "estimated_cost_usd", 0.0)
             if t_tokens == 0:

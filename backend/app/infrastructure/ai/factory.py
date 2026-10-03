@@ -49,7 +49,7 @@ from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.logging import get_logger
-from app.core.telemetry import LLM_TOKEN_USAGE_COUNTER
+from app.core.telemetry import LLM_COST_COUNTER, LLM_TOKEN_USAGE_COUNTER
 from app.core.token_counter import calculate_cost
 from app.infrastructure.agents.safety import agent_safety_filter
 from app.infrastructure.ai.base import BaseLLMGateway, LLMResponse
@@ -126,13 +126,15 @@ class OpenAIGateway(BaseLLMGateway):
                 # Record metrics
                 LLM_TOKEN_USAGE_COUNTER.labels(provider="openai", model=m, token_type="prompt").inc(p_tokens)
                 LLM_TOKEN_USAGE_COUNTER.labels(provider="openai", model=m, token_type="completion").inc(c_tokens)
+                cost = calculate_cost(p_tokens, c_tokens, model=m, provider="openai")
+                LLM_COST_COUNTER.labels(provider="openai", model=m).inc(cost)
 
                 return LLMResponse(
                     content=content,
                     prompt_tokens=p_tokens,
                     completion_tokens=c_tokens,
                     total_tokens=tot_tokens,
-                    estimated_cost_usd=calculate_cost(p_tokens, c_tokens, model=m, provider="openai"),
+                    estimated_cost_usd=cost,
                     model=m,
                     provider="openai",
                 )
@@ -263,13 +265,15 @@ class AnthropicGateway(BaseLLMGateway):
 
                 LLM_TOKEN_USAGE_COUNTER.labels(provider="anthropic", model=m, token_type="prompt").inc(p_tokens)
                 LLM_TOKEN_USAGE_COUNTER.labels(provider="anthropic", model=m, token_type="completion").inc(c_tokens)
+                cost = calculate_cost(p_tokens, c_tokens, model=m, provider="anthropic")
+                LLM_COST_COUNTER.labels(provider="anthropic", model=m).inc(cost)
 
                 return LLMResponse(
                     content=content,
                     prompt_tokens=p_tokens,
                     completion_tokens=c_tokens,
                     total_tokens=tot_tokens,
-                    estimated_cost_usd=calculate_cost(p_tokens, c_tokens, model=m, provider="anthropic"),
+                    estimated_cost_usd=cost,
                     model=m,
                     provider="anthropic",
                 )
@@ -342,27 +346,51 @@ class GroqGateway(OpenAIGateway):
         temperature: float = 0.1,
         max_tokens: int = 2048,
     ) -> LLMResponse:
-        model_name = model or settings.GROQ_DEFAULT_MODEL or "qwen/qwen3.6-27b"
+        client = self._ensure_client()
+        if not client:
+            raise ValueError("Groq client not configured or SDK not installed.")
+
+        sanitized_user_prompt = agent_safety_filter.sanitize_repository_content(user_prompt)
+        model_name = model or settings.GROQ_DEFAULT_MODEL or "openai/gpt-oss-120b"
         candidate_models = [
             model_name,
             "openai/gpt-oss-120b",
-            "qwen/qwen3.6-27b",
             "openai/gpt-oss-20b",
+            "qwen/qwen3.8-27b",
         ]
         unique_models = list(dict.fromkeys(candidate_models))
         last_error = None
 
         for m in unique_models:
             try:
-                res = await super().generate_text(
-                    system_prompt=system_prompt,
-                    user_prompt=user_prompt,
+                resp = await client.chat.completions.create(
                     model=m,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": sanitized_user_prompt},
+                    ],
                     temperature=temperature,
                     max_tokens=max_tokens,
                 )
-                res.provider = self.provider
-                return res
+                content = resp.choices[0].message.content or ""
+                p_tokens = resp.usage.prompt_tokens if resp.usage else 0
+                c_tokens = resp.usage.completion_tokens if resp.usage else 0
+                tot_tokens = p_tokens + c_tokens
+
+                LLM_TOKEN_USAGE_COUNTER.labels(provider="groq", model=m, token_type="prompt").inc(p_tokens)
+                LLM_TOKEN_USAGE_COUNTER.labels(provider="groq", model=m, token_type="completion").inc(c_tokens)
+                cost = calculate_cost(p_tokens, c_tokens, model=m, provider="groq")
+                LLM_COST_COUNTER.labels(provider="groq", model=m).inc(cost)
+
+                return LLMResponse(
+                    content=content,
+                    prompt_tokens=p_tokens,
+                    completion_tokens=c_tokens,
+                    total_tokens=tot_tokens,
+                    estimated_cost_usd=cost,
+                    model=m,
+                    provider="groq",
+                )
             except Exception as e:
                 last_error = e
                 logger.warning(f"Groq model {m} failed: {e}. Trying fallback model...")
@@ -382,12 +410,12 @@ class GroqGateway(OpenAIGateway):
         if not self.instructor_client:
             raise ValueError("Groq client not configured or SDK not installed. Please set GROQ_API_KEY in .env.")
 
-        model_name = model or settings.GROQ_DEFAULT_MODEL or "qwen/qwen3.6-27b"
+        model_name = model or settings.GROQ_DEFAULT_MODEL or "openai/gpt-oss-120b"
         candidate_models = [
             model_name,
             "openai/gpt-oss-120b",
-            "qwen/qwen3.6-27b",
             "openai/gpt-oss-20b",
+            "qwen/qwen3.8-27b",
         ]
         unique_models = list(dict.fromkeys(candidate_models))
 
@@ -494,13 +522,15 @@ class GeminiGateway(BaseLLMGateway):
 
                 LLM_TOKEN_USAGE_COUNTER.labels(provider="gemini", model=m_name, token_type="prompt").inc(p_tokens)
                 LLM_TOKEN_USAGE_COUNTER.labels(provider="gemini", model=m_name, token_type="completion").inc(c_tokens)
+                cost = calculate_cost(p_tokens, c_tokens, model=m_name, provider="gemini")
+                LLM_COST_COUNTER.labels(provider="gemini", model=m_name).inc(cost)
 
                 return LLMResponse(
                     content=content,
                     prompt_tokens=p_tokens,
                     completion_tokens=c_tokens,
                     total_tokens=tot_tokens,
-                    estimated_cost_usd=calculate_cost(p_tokens, c_tokens, model=m_name, provider="gemini"),
+                    estimated_cost_usd=cost,
                     model=m_name,
                     provider="gemini",
                 )
@@ -555,6 +585,13 @@ class GeminiGateway(BaseLLMGateway):
                     )
                 )
                 if resp.text:
+                    if hasattr(resp, "usage_metadata") and resp.usage_metadata:
+                        p_tok = getattr(resp.usage_metadata, "prompt_token_count", 0) or 0
+                        c_tok = getattr(resp.usage_metadata, "candidates_token_count", 0) or 0
+                        LLM_TOKEN_USAGE_COUNTER.labels(provider="gemini", model=m_name, token_type="prompt").inc(p_tok)
+                        LLM_TOKEN_USAGE_COUNTER.labels(provider="gemini", model=m_name, token_type="completion").inc(c_tok)
+                        cost = calculate_cost(p_tok, c_tok, model=m_name, provider="gemini")
+                        LLM_COST_COUNTER.labels(provider="gemini", model=m_name).inc(cost)
                     return response_model.model_validate_json(resp.text)
             except Exception as e:
                 last_err = e

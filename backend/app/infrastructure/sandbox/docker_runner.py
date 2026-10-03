@@ -5,7 +5,9 @@ with automatic fallback to isolated subprocess execution when Docker daemon is n
 """
 
 import asyncio
+import os
 import shutil
+import subprocess
 import sys
 from typing import Any
 
@@ -54,14 +56,20 @@ class HermeticDockerRunner:
             self._docker_available = False
             return False
 
+        def _ping_docker() -> bool:
+            try:
+                res = subprocess.run(
+                    ["docker", "info"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=5.0,
+                )
+                return res.returncode == 0
+            except Exception:
+                return False
+
         try:
-            proc = await asyncio.create_subprocess_exec(
-                "docker", "info",
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL
-            )
-            await asyncio.wait_for(proc.communicate(), timeout=3.0)
-            self._docker_available = (proc.returncode == 0)
+            self._docker_available = await asyncio.to_thread(_ping_docker)
         except Exception:
             self._docker_available = False
 
@@ -83,7 +91,8 @@ class HermeticDockerRunner:
         docker_ready = await self._check_docker()
 
         if docker_ready:
-            logger.info("Executing in Hermetic Docker Sandbox", command=command, workspace=workspace_dir)
+            abs_workspace = os.path.abspath(workspace_dir)
+            logger.info("Executing in Hermetic Docker Sandbox", command=command, workspace=abs_workspace)
             cmd_args = [
                 "docker", "run", "--rm",
                 f"--cpus={cpu_limit}",
@@ -95,34 +104,24 @@ class HermeticDockerRunner:
             if network_disabled:
                 cmd_args.append("--network=none")
             cmd_args.extend([
-                "-v", f"{workspace_dir}:/workspace:rw",
+                "-v", f"{abs_workspace}:/workspace:rw",
                 "-w", "/workspace",
                 self.default_image,
                 "sh", "-c", f"{command} 2>&1 | head -c 5242880"
             ])
 
-            try:
-                process = await asyncio.create_subprocess_exec(
-                    *cmd_args,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
+            def _run_docker_sync() -> subprocess.CompletedProcess[bytes]:
+                return subprocess.run(
+                    cmd_args,
+                    capture_output=True,
+                    timeout=timeout_seconds,
                 )
-                try:
-                    stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                        process.communicate(), timeout=timeout_seconds
-                    )
-                    exit_code = process.returncode or 0
-                    stdout = stdout_bytes.decode("utf-8", errors="replace")
-                    stderr = stderr_bytes.decode("utf-8", errors="replace")
-                except TimeoutError:
-                    try:
-                        process.kill()
-                    except Exception:
-                        pass
-                    exit_code = -1
-                    stdout = ""
-                    stderr = f"Sandbox execution timed out after {timeout_seconds} seconds."
 
+            try:
+                res = await asyncio.to_thread(_run_docker_sync)
+                exit_code = res.returncode
+                stdout = res.stdout.decode("utf-8", errors="replace")
+                stderr = res.stderr.decode("utf-8", errors="replace")
                 duration = asyncio.get_running_loop().time() - start_time
                 return SandboxExecutionResult(
                     exit_code=exit_code,
@@ -131,46 +130,41 @@ class HermeticDockerRunner:
                     duration_seconds=duration,
                     passed=(exit_code == 0),
                 )
+            except subprocess.TimeoutExpired:
+                duration = asyncio.get_running_loop().time() - start_time
+                return SandboxExecutionResult(
+                    exit_code=-1,
+                    stdout="",
+                    stderr=f"Sandbox execution timed out after {timeout_seconds} seconds.",
+                    duration_seconds=duration,
+                    passed=False,
+                )
             except Exception as e:
                 logger.warning("Docker execution failed, falling back to local runner", error=str(e))
 
         # Fallback: Isolated local subprocess execution with strict cwd and timeout
         logger.info("Executing in Subprocess Sandbox Fallback", command=command, workspace=workspace_dir)
         try:
-            is_win = sys.platform.startswith("win")
             shell_cmd = command
 
-            if is_win:
-                process = await asyncio.create_subprocess_shell(
+            def _run_subprocess_sync() -> subprocess.CompletedProcess[bytes]:
+                return subprocess.run(
                     shell_cmd,
+                    shell=True,
                     cwd=workspace_dir,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-            else:
-                process = await asyncio.create_subprocess_exec(
-                    "sh", "-c", shell_cmd,
-                    cwd=workspace_dir,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
+                    capture_output=True,
+                    timeout=timeout_seconds,
                 )
 
             try:
-                stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                    process.communicate(), timeout=timeout_seconds
-                )
-                exit_code = process.returncode or 0
-                stdout = stdout_bytes.decode("utf-8", errors="replace")
-                stderr = stderr_bytes.decode("utf-8", errors="replace")
-            except TimeoutError:
-                try:
-                    process.kill()
-                except Exception:
-                    pass
+                res = await asyncio.to_thread(_run_subprocess_sync)
+                exit_code = res.returncode
+                stdout = res.stdout.decode("utf-8", errors="replace")
+                stderr = res.stderr.decode("utf-8", errors="replace")
+            except subprocess.TimeoutExpired:
                 exit_code = -1
                 stdout = ""
                 stderr = f"Sandbox execution timed out after {timeout_seconds} seconds."
-
         except Exception as e:
             logger.error("Sandbox execution error", error=str(e))
             exit_code = 1

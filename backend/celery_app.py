@@ -4,14 +4,23 @@ Orchestrates asynchronous migration execution, background AST indexing, and sand
 """
 
 import asyncio
+import sys
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 import typing
 import uuid
 from datetime import UTC, datetime
 
 from celery import Celery
 
+import time
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.core.telemetry import (
+    ACTIVE_WORKFLOWS_GAUGE,
+    WORKFLOW_DURATION_HISTOGRAM,
+    WORKFLOW_EXECUTION_COUNTER,
+)
 from app.infrastructure.database.redis.client import redis_engine
 
 logger = get_logger("codemigration.celery")
@@ -54,6 +63,7 @@ def run_migration_workflow_task(
     source_framework: str | None = None,
     target_language: str | None = None,
     custom_goal: str | None = None,
+    auto_approve: bool = False,
 ) -> dict:
     """Execute LangGraph workflow in asynchronous Celery worker."""
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -63,6 +73,10 @@ def run_migration_workflow_task(
     from app.infrastructure.ai.factory import llm_factory
 
     logger.info("Starting Celery migration workflow task", workflow_id=workflow_id, is_resume=is_resume, target_framework=target_framework)
+    _task_start_time = time.time()
+    ACTIVE_WORKFLOWS_GAUGE.inc()
+    WORKFLOW_EXECUTION_COUNTER.labels(workflow_type=workflow_type, status="started", target_framework=target_framework).inc()
+
     thread_id = f"workflow_thread_{workflow_id}"
     config = {
         "configurable": {"thread_id": thread_id},
@@ -83,7 +97,7 @@ def run_migration_workflow_task(
         "current_step": "init",
         "retry_count": 0,
         "max_retries": settings.WORKFLOW_MAX_RETRIES,
-        "is_human_approved": False,
+        "is_human_approved": True if (is_resume or auto_approve) else False,
         "file_list": [],
         "detected_languages": [],
         "detected_frameworks": [],
@@ -127,6 +141,13 @@ def run_migration_workflow_task(
         # Convert sqlalchemy URI to standard postgresql URI for psycopg
         db_uri = str(settings.POSTGRES_ASYNC_URI).replace("postgresql+asyncpg://", "postgresql://")
         db_uri = db_uri.replace("?ssl=", "?sslmode=").replace("&ssl=", "&sslmode=")
+        if "neon.tech" in db_uri and "endpoint=" not in db_uri:
+            import re
+            m = re.search(r"@([^/]+)\.neon\.tech", db_uri)
+            if m:
+                endpoint_id = m.group(1).split(".")[0]
+                sep = "&" if "?" in db_uri else "?"
+                db_uri = f"{db_uri}{sep}options=endpoint%3D{endpoint_id}"
 
         try:
             # Update workflow status in DB if it was queued
@@ -154,7 +175,7 @@ def run_migration_workflow_task(
 
             async with AsyncPostgresSaver.from_conn_string(db_uri) as checkpointer:
                 await checkpointer.setup()
-                interrupt_nodes = [] if is_resume else ["planner"]
+                interrupt_nodes = [] if (is_resume or auto_approve) else ["planner"]
                 app_graph = build_migration_graph().compile(
                     checkpointer=checkpointer,
                     interrupt_after=interrupt_nodes
@@ -245,6 +266,7 @@ def run_migration_workflow_task(
                                     "total_cost_usd": round(float(live_cost), 6),
                                     "timestamp": datetime.now(UTC).isoformat(),
                                 })
+                                WORKFLOW_DURATION_HISTOGRAM.labels(workflow_type=workflow_type, step_name=node_name).observe(time.time() - _task_start_time)
 
                 post_snapshot = await app_graph.aget_state(config)
                 result = post_snapshot.values if post_snapshot else {}
@@ -269,7 +291,7 @@ def run_migration_workflow_task(
                     post_snapshot = await app_graph.aget_state(config)
                     has_next = bool(post_snapshot and post_snapshot.next)
 
-                    if has_next and not is_resume:
+                    if has_next and not (is_resume or auto_approve):
                         new_status = "awaiting_approval"
                         step_idx = 1
                     else:
@@ -305,6 +327,9 @@ def run_migration_workflow_task(
 
                     # Broadcast completion event if finished
                     if new_status == "completed":
+                        ACTIVE_WORKFLOWS_GAUGE.dec()
+                        WORKFLOW_EXECUTION_COUNTER.labels(workflow_type=workflow_type, status="completed", target_framework=target_framework).inc()
+                        WORKFLOW_DURATION_HISTOGRAM.labels(workflow_type=workflow_type, step_name="total").observe(time.time() - _task_start_time)
                         await redis_engine.publish_workflow_event(workflow_id, {
                             "type": "workflow_completed",
                             "status": "completed",
@@ -318,7 +343,12 @@ def run_migration_workflow_task(
         finally:
             await task_engine.dispose()
 
-    loop = asyncio.new_event_loop()
+    import sys
+    if sys.platform == "win32":
+        import selectors
+        loop = asyncio.SelectorEventLoop(selectors.SelectSelector())
+    else:
+        loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
         final_state = loop.run_until_complete(execute_graph())
@@ -337,10 +367,13 @@ def run_migration_workflow_task(
         except Exception:
             pass
 
+        ACTIVE_WORKFLOWS_GAUGE.dec()
         if isinstance(e, asyncio.CancelledError) or is_cancelled:
+            WORKFLOW_EXECUTION_COUNTER.labels(workflow_type=workflow_type, status="cancelled", target_framework=target_framework).inc()
             logger.info("Workflow execution cancelled. Skipping error mark.", workflow_id=workflow_id)
             return {"status": "cancelled", "workflow_id": workflow_id}
 
+        WORKFLOW_EXECUTION_COUNTER.labels(workflow_type=workflow_type, status="failed", target_framework=target_framework).inc()
         error_message = str(e)
         logger.error("Celery workflow execution failed", error=error_message)
 

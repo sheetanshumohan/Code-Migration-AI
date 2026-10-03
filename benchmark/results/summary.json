@@ -1,0 +1,65 @@
+{
+  "benchmark_metadata": {
+    "total_runs": 1,
+    "warmup_runs": 0,
+    "successful_runs": 0,
+    "failed_runs": 1,
+    "success_rate_percent": 0.0,
+    "validation_pass_rate_percent": 0.0,
+    "timestamp_utc": "2026-10-03T14:26:56.312985+00:00"
+  },
+  "workflow_latency_seconds": {
+    "mean": 30.015,
+    "median": 0.0,
+    "p95": 0.0,
+    "p99": 0.0,
+    "min": 30.015,
+    "max": 30.015
+  },
+  "websocket_streaming": {
+    "mean_first_event_latency_ms": 0.0,
+    "median_first_event_latency_ms": 0.0,
+    "p95_first_event_latency_ms": 0.0,
+    "mean_events_per_run": 0.0
+  },
+  "ast_engine": {
+    "files_analyzed_per_run": 7,
+    "python_files_parsed_per_run": 6,
+    "symbols_extracted_per_run": 24,
+    "mean_parse_duration_seconds": 0.1024,
+    "mean_files_per_second": 58.6
+  },
+  "docker_sandbox": {
+    "mean_execution_seconds": 0.0,
+    "total_validation_runs": 0,
+    "isolation_type": "Hermetic Container (python:3.13-slim)"
+  },
+  "llm_resource_consumption": {
+    "mean_total_tokens": 0.0,
+    "median_total_tokens": 0.0,
+    "min_total_tokens": 0,
+    "max_total_tokens": 0,
+    "mean_cost_usd": 0.0,
+    "total_tokens_all_runs": 0,
+    "total_cost_usd_all_runs": 0.0
+  },
+  "code_transformation": {
+    "mean_files_changed": 0.0,
+    "mean_tests_generated": 1.0
+  },
+  "celery": {
+    "mean_task_execution_seconds": 30.015,
+    "total_retries": 0
+  },
+  "concurrency": {
+    "simultaneous_requests": 2,
+    "dispatch_latency_ms": 30886.62,
+    "status_codes": [
+      200,
+      409
+    ],
+    "concurrency_protection_enforced": true,
+    "accepted_workflows": 1,
+    "rejected_conflict_workflows": 1
+  }
+}

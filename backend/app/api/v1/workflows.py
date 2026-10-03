@@ -115,6 +115,7 @@ async def start_migration_workflow(
         source_framework=req.source_framework,
         target_language=req.target_language,
         custom_goal=req.custom_goal,
+        auto_approve=req.auto_approve,
     )
 
     return WorkflowResponse(

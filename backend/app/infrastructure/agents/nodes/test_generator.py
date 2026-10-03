@@ -134,6 +134,10 @@ RULES:
         else:
             test_file_path = f"tests/test_{safe_name}{ext if ext else '.py'}"
 
+        if not test_code.strip():
+            logger.warning(f"Test generator returned empty code for {file_path}, skipping write")
+            continue
+
         git_engine.write_file_content(state["repo_path"], test_file_path, test_code)
 
         generated_tests.append({

@@ -161,6 +161,15 @@ async def root_ping() -> dict:
     }
 
 
+@app.get("/metrics", tags=["Metrics"])
+@app.get(f"{settings.API_V1_STR}/metrics", tags=["Metrics"])
+async def prometheus_metrics():
+    """Prometheus exposition format metrics for application observability."""
+    from fastapi.responses import Response
+    from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
 @app.get("/health", tags=["Health"])
 @app.get(f"{settings.API_V1_STR}/health", tags=["Health"])
 async def health_check() -> dict:

@@ -20,14 +20,19 @@ class Neo4jGraphEngine:
     def __init__(self) -> None:
         self._driver: AsyncDriver | None = None
         self._loop: Any = None
+        self._connect_failed: bool = False
 
     def reset(self) -> None:
         """Reset driver reference so new event loops create fresh connections."""
         self._driver = None
         self._loop = None
+        self._connect_failed = False
 
     async def _ensure_driver(self) -> AsyncDriver | None:
         """Ensure the driver is connected to the currently running event loop."""
+        if self._connect_failed:
+            return None
+
         try:
             current_loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -41,6 +46,9 @@ class Neo4jGraphEngine:
 
     async def connect(self) -> None:
         """Initialize connection pool to Neo4j."""
+        if self._connect_failed:
+            return
+
         try:
             self._loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -59,6 +67,7 @@ class Neo4jGraphEngine:
             logger.info("Connected to Neo4j Graph Engine successfully")
         except Exception as e:
             self._driver = None
+            self._connect_failed = True
             logger.warning("Could not connect to Neo4j (will fallback or retry in live env)", error=str(e))
 
     async def close(self) -> None:

@@ -1,0 +1,36 @@
+{
+  "benchmark_name": "Code-Migration-AI-Production-Benchmark",
+  "version": "1.0.0",
+  "runs": 1,
+  "warmup_runs": 0,
+  "concurrency_runs": 2,
+  "llm": {
+    "provider": "groq",
+    "model": "openai/gpt-oss-120b",
+    "fast_model": "openai/gpt-oss-120b",
+    "temperature": 0.1
+  },
+  "workflow": {
+    "workflow_type": "framework_upgrade",
+    "source_framework": "Flask",
+    "target_framework": "FastAPI",
+    "target_language": "Python",
+    "custom_goal": "Migrate models, repository, and service layer to modern typed FastAPI with Pydantic v2 schemas and async architecture",
+    "auto_approve": true
+  },
+  "repository": {
+    "name": "fixture-order-service",
+    "repository_id": "a2e0cfeb-294f-42b2-85ca-dc59fee47bfc",
+    "organization_id": "7f5012c1-a20b-40c5-819a-8c75418c1f31",
+    "fixture_path": "benchmark/fixture_repo",
+    "target_files": 7
+  },
+  "environment": {
+    "backend_url": "http://127.0.0.1:8000",
+    "websocket_url": "ws://127.0.0.1:8000/api/v1/ws/workflows",
+    "sandbox_image": "python:3.13-slim",
+    "database": "PostgreSQL (Neon Cloud AsyncPool)",
+    "redis": "Redis (Upstash SSL Engine)",
+    "sandbox": "Hermetic Docker Engine"
+  }
+}

@@ -1,0 +1,54 @@
+[
+  {
+    "run_index": 1,
+    "is_warmup": false,
+    "workflow_id": "740bc0bc-d7c3-4e12-b1f9-7e53d98398bf",
+    "status": "cancelled",
+    "success": false,
+    "total_execution_seconds": 30.015,
+    "trigger_latency_ms": 8637.13,
+    "websocket": {
+      "first_event_latency_ms": 0.0,
+      "total_events_received": 0
+    },
+    "ast": {
+      "files_analyzed": 7,
+      "python_files_parsed": 6,
+      "ast_symbols_extracted": 24,
+      "ast_loc": 139,
+      "ast_parse_time_seconds": 0.1024,
+      "ast_files_per_second": 58.6,
+      "ast_symbols_per_second": 234.38
+    },
+    "stages": {
+      "repo_analyst": 0.0,
+      "prompt_validator": 0.0,
+      "planner": 0.0,
+      "refactor": 0.0,
+      "test_generator": 0.0,
+      "validator": 0.0,
+      "reviewer": 0.0
+    },
+    "llm": {
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "total_tokens": 0,
+      "total_cost_usd": 0.0
+    },
+    "validation": {
+      "passed": false,
+      "docker_execution_seconds": 0.0,
+      "linter_errors": 0,
+      "type_errors": 0
+    },
+    "celery": {
+      "task_execution_seconds": 30.015,
+      "retries": 0
+    },
+    "output": {
+      "files_analyzed": 7,
+      "files_changed": 0,
+      "tests_generated": 1
+    }
+  }
+]

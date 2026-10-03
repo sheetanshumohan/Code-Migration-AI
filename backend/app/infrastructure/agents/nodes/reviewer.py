@@ -48,11 +48,12 @@ The autonomous agent pipeline processed repository `{state['repository_id']}`.
     # Include real validation results if available
     val = state.get("validation_results")
     if val:
-        passed_str = "✅ PASSED" if getattr(val, "passed", False) else "❌ FAILED"
-        linter_count = len(getattr(val, "linter_errors", []))
-        type_count   = len(getattr(val, "type_check_errors", []))
-        sec_count    = len(getattr(val, "security_vulnerabilities", []))
-        test_fails   = len(getattr(val, "test_failures", []))
+        is_passed = val.get("passed", False) if isinstance(val, dict) else getattr(val, "passed", False)
+        passed_str = "✅ PASSED" if is_passed else "❌ FAILED"
+        linter_count = len(val.get("linter_errors", []) if isinstance(val, dict) else getattr(val, "linter_errors", []))
+        type_count   = len(val.get("type_check_errors", []) if isinstance(val, dict) else getattr(val, "type_check_errors", []))
+        sec_count    = len(val.get("security_vulnerabilities", []) if isinstance(val, dict) else getattr(val, "security_vulnerabilities", []))
+        test_fails   = len(val.get("test_failures", []) if isinstance(val, dict) else getattr(val, "test_failures", []))
         report_markdown += f"""### Quality Gate Results: {passed_str}
 - Linter Errors: {linter_count}
 - Type Check Errors: {type_count}

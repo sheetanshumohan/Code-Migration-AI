@@ -49,7 +49,7 @@ async def validator_node(state: MigrationWorkflowState) -> dict[str, Any]:
         commands.append("node -v >/dev/null 2>&1 && npm test --if-present 2>&1 || true")
     if has_python:
         # Python syntax and test check
-        commands.append("python -m py_compile $(find . -name '*.py' -not -path '*/.*' 2>/dev/null) 2>&1 || true")
+        commands.append("python -m compileall -q . 2>&1 || true")
     if not commands:
         commands.append("echo 'AST Static Syntax Validation Passed' 2>&1")
 
@@ -125,9 +125,13 @@ async def validator_node(state: MigrationWorkflowState) -> dict[str, Any]:
         "timestamp": thought_now,
     })
 
+    current_retries = state.get("retry_count", 0)
+    new_retries = 0 if passed else current_retries + 1
+
     return {
         "current_step": "ValidationAgent",
         "validation_results": validation,
+        "retry_count": new_retries,
         "thought_stream": [{
             "agent": "ValidationAgent",
             "thought": thought_msg,
